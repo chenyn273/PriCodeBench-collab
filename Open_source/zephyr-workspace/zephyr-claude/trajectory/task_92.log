@@ -1,0 +1,58 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation looks correct. It follows the same pattern as `fs_mkdir` (lines 501-531):
+
+1. **Path validation** — checks non-NULL, starts with `/`, isn't just `/`
+2. **Mount point lookup** — via `fs_get_mnt_point`
+3. **Read-only check** — returns `-EROFS` if the mount point is read-only
+4. **Operation support check** — uses `CHECKIF` to return `-ENOTSUP` if `unlink` is NULL
+5. **Filesystem call** — calls `mp->fs->unlink(mp, abs_path)`, logs and returns the result
+
+The only thing I notice from the diff is the error message changed from `"failed to unlink path (%d)"` to `"failed to unlink (%d)"` — matching the style of `fs_mkdir`'s `"failed to create directory (%d)"` rather than adding the word "path". The function is complete and ready for use.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- subsys/fs/fs.c
++++ subsys/fs/fs.c
+@@ -532,7 +532,34 @@
+ 
+ int fs_unlink(const char *abs_path)
+ {
+-    /* MASKED - implement this function */
++	struct fs_mount_t *mp;
++	int rc = -EINVAL;
++
++	if ((abs_path == NULL) || (abs_path[0] != '/') || (abs_path[1] == '\0')) {
++		LOG_ERR("invalid file name!!");
++		return -EINVAL;
++	}
++
++	rc = fs_get_mnt_point(&mp, abs_path, NULL);
++	if (rc < 0) {
++		LOG_ERR("mount point not found!!");
++		return rc;
++	}
++
++	if (mp->flags & FS_MOUNT_FLAG_READ_ONLY) {
++		return -EROFS;
++	}
++
++	CHECKIF(mp->fs->unlink == NULL) {
++		return -ENOTSUP;
++	}
++
++	rc = mp->fs->unlink(mp, abs_path);
++	if (rc < 0) {
++		LOG_ERR("failed to unlink (%d)", rc);
++	}
++
++	return rc;
+ }
+ 
+ int fs_rename(const char *from, const char *to)
+
+
+

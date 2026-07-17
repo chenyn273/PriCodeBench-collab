@@ -1,0 +1,52 @@
+# task_id=86
+# sut_function=?
+# error_category=exception
+# error='utf-8' codec can't decode byte 0x84 in position 16093: invalid start byte
+# runtime_s=-1
+
+============================================================
+=== Claude Session ===
+============================================================
+The `fs_seek` function has been implemented. The implementation:
+
+1. **Validates** `zfp->mp` is not NULL — returns `-EBADF` if the file isn't open
+2. **Checks** that the filesystem driver provides an `lseek` callback — returns `-ENOTSUP` otherwise
+3. **Delegates** to `zfp->mp->fs->lseek(zfp, offset, whence)` — which handles the actual seek operation
+4. **Maps the return value**: the underlying `lseek` returns the new position on success (>= 0), so `fs_seek` returns 0 on success and propagates the negative errno on failure
+
+This follows the same conventions as the surrounding functions (`fs_read`, `fs_write`, `fs_tell`, `fs_truncate`, `fs_sync`) — same validation order, same `CHECKIF` pattern, same `LOG_ERR` on failure.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- subsys/fs/fs.c
++++ subsys/fs/fs.c
+@@ -268,7 +268,23 @@
+ 
+ int fs_seek(struct fs_file_t *zfp, off_t offset, int whence)
+ {
+-    /* MASKED - implement this function */
++	int rc = -EINVAL;
++
++	if (zfp->mp == NULL) {
++		return -EBADF;
++	}
++
++	CHECKIF(zfp->mp->fs->lseek == NULL) {
++		return -ENOTSUP;
++	}
++
++	rc = zfp->mp->fs->lseek(zfp, offset, whence);
++	if (rc < 0) {
++		LOG_ERR("file seek error (%d)", rc);
++		return rc;
++	}
++
++	return 0;
+ }
+ 
+ off_t fs_tell(struct fs_file_t *zfp)
+
+
+

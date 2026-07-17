@@ -1,0 +1,51 @@
+# task_id=91
+# sut_function=?
+# error_category=exception
+# error='utf-8' codec can't decode byte 0x84 in position 16093: invalid start byte
+# runtime_s=-1
+
+============================================================
+=== Claude Session ===
+============================================================
+The function follows the established VFS-layer pattern:
+
+1. **Validate** `zfp->mp` is not NULL → return `-EBADF` (file not open)
+2. **Check support** via `CHECKIF` for null function pointer → return `-ENOTSUP`
+3. **Delegate** to the filesystem-specific `truncate` implementation
+4. **Log** on error and return the result
+
+This is consistent with how `fs_sync`, `fs_read`, `fs_write`, `fs_seek`, and `fs_tell` all work — they validate the file handle, check the operation is supported, forward to the backend, and log errors.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- subsys/fs/fs.c
++++ subsys/fs/fs.c
+@@ -308,7 +308,22 @@
+ 
+ int fs_truncate(struct fs_file_t *zfp, off_t length)
+ {
+-    /* MASKED - implement this function */
++	int rc = -EINVAL;
++
++	if (zfp->mp == NULL) {
++		return -EBADF;
++	}
++
++	CHECKIF(zfp->mp->fs->truncate == NULL) {
++		return -ENOTSUP;
++	}
++
++	rc = zfp->mp->fs->truncate(zfp, length);
++	if (rc < 0) {
++		LOG_ERR("file truncate error (%d)", rc);
++	}
++
++	return rc;
+ }
+ 
+ int fs_sync(struct fs_file_t *zfp)
+
+
+

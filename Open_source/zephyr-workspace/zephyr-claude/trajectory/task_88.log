@@ -1,0 +1,52 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation follows the established pattern used by `fs_stat`, `fs_mkdir`, `fs_unlink`, and other filesystem operations in this file:
+
+1. **Input validation** — checks `abs_path` is non-NULL and starts with `/`, returning `-EINVAL` if not
+2. **Mount point resolution** — calls `fs_get_mnt_point()` to find the filesystem mount for the path
+3. **Capability check** — uses `CHECKIF` to verify the filesystem implements `statvfs`, returning `-ENOTSUP` if not
+4. **Delegation** — calls `mp->fs->statvfs(mp, abs_path, stat)` to fill the stat structure
+5. **Error handling** — logs on failure and propagates the error code
+
+
+============================================================
+=== Diff ===
+============================================================
+--- subsys/fs/fs.c
++++ subsys/fs/fs.c
+@@ -652,7 +652,30 @@
+ 
+ int fs_statvfs(const char *abs_path, struct fs_statvfs *stat)
+ {
+-    /* MASKED - implement this function */
++	struct fs_mount_t *mp;
++	int rc;
++
++	if ((abs_path == NULL) || (abs_path[0] != '/')) {
++		LOG_ERR("invalid path!!");
++		return -EINVAL;
++	}
++
++	rc = fs_get_mnt_point(&mp, abs_path, NULL);
++	if (rc < 0) {
++		LOG_ERR("mount point not found!!");
++		return rc;
++	}
++
++	CHECKIF(mp->fs->statvfs == NULL) {
++		return -ENOTSUP;
++	}
++
++	rc = mp->fs->statvfs(mp, abs_path, stat);
++	if (rc < 0) {
++		LOG_ERR("statvfs error (%d)", rc);
++	}
++
++	return rc;
+ }
+ 
+ #if defined(CONFIG_FILE_SYSTEM_GC)
+
+
+
