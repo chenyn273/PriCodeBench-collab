@@ -1,0 +1,57 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. `fs_mkdir` follows the exact same pattern as the adjacent `fs_unlink` function:
+
+1. **Input validation** — rejects NULL, paths not starting with `/`, and root path `/`
+2. **Mount point resolution** — calls `fs_get_mnt_point` to find the mounted filesystem
+3. **Read-only check** — returns `-EROFS` if the mount is read-only
+4. **Capability check** — returns `-ENOTSUP` if the filesystem driver doesn't implement `mkdir`
+5. **Delegation** — calls `mp->fs->mkdir(mp, abs_path)` on the underlying filesystem driver
+6. **Error handling** — logs the error code on failure
+
+
+============================================================
+=== Diff ===
+============================================================
+--- subsys/fs/fs.c
++++ subsys/fs/fs.c
+@@ -500,7 +500,34 @@
+ /* Filesystem operations */
+ int fs_mkdir(const char *abs_path)
+ {
+-    /* MASKED - implement this function */
++	struct fs_mount_t *mp;
++	int rc = -EINVAL;
++
++	if ((abs_path == NULL) || (abs_path[0] != '/') || (abs_path[1] == '\0')) {
++		LOG_ERR("invalid directory name!!");
++		return -EINVAL;
++	}
++
++	rc = fs_get_mnt_point(&mp, abs_path, NULL);
++	if (rc < 0) {
++		LOG_ERR("mount point not found!!");
++		return rc;
++	}
++
++	if (mp->flags & FS_MOUNT_FLAG_READ_ONLY) {
++		return -EROFS;
++	}
++
++	CHECKIF(mp->fs->mkdir == NULL) {
++		return -ENOTSUP;
++	}
++
++	rc = mp->fs->mkdir(mp, abs_path);
++	if (rc < 0) {
++		LOG_ERR("failed to create directory (%d)", rc);
++	}
++
++	return rc;
+ }
+ 
+ int fs_unlink(const char *abs_path)
+
+
+
