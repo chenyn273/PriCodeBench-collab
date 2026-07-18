@@ -29,7 +29,7 @@ PriCodeBench-collab/
 │   │   ├── 结果.md              ← 最新一轮测试结果报告
 │   │   ├── results/             ← 结构化运行结果（JSONL）
 │   │   ├── trajectory/          ← 每个 task 的完整执行日志
-│   │   ├── *.verified.jsonl     ← 538 个已验证任务（305 .c + 234 .h）
+│   │   ├── *.verified.jsonl     ← 538 个已验证任务（304 .c + 234 .h）
 │   │   └── .claude/             ← Claude Code 配置
 │   │
 │   └── tests/                   ← RIOT 单元测试（Agent 看不到）
@@ -88,7 +88,7 @@ PriCodeBench-collab/
 
 | 文件 | 数量 | 说明 |
 |---|---|---|
-| `riot_tasks_with_commands.c.verified.jsonl` | 305 | `.c` 源文件函数 |
+| `riot_tasks_with_commands.c.verified.jsonl` | 304 | `.c` 源文件函数 |
 | `riot_tasks_with_commands.h.verified.jsonl` | 234 | `.h` 头文件中的静态 inline 函数 |
 
 每条任务：
