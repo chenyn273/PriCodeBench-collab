@@ -1,0 +1,123 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `coap_opt_add_uri_query2` does:
+
+1. **Asserts preconditions** from the header docs: `pkt`, `key`, `key_len > 0`, and either `val_len == 0` or (`val` non-NULL and `val_len > 0`)
+2. **Checks option slot availability** — returns `-ENOSPC` if max options reached
+3. **Computes the query value length**: `key_len` plus `1 + val_len` if `val` is provided (for the `=` separator and value), or just `key_len` if no value
+4. **Calculates total option size** (header + value) using `_put_delta_optlen` dummy writes, matching the pattern in `_add_opt_pkt`
+5. **Checks buffer space** — returns `-ENOSPC` if insufficient
+6. **Writes the option header** (delta + length) directly into the packet buffer
+7. **Writes the query content** (`key[=value]`) after the header
+8. **Updates packet state** — records the option in `pkt->options`, advances `pkt->payload`, decrements `pkt->payload_len`
+9. **Returns** the number of bytes written
+
+This follows the same pattern as `_add_opt_pkt` but constructs the combined `key=value` option value inline rather than requiring a pre-built buffer, avoiding the overlap issue that would occur with a naive call to `_add_opt_pkt`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/application_layer/nanocoap/nanocoap.c
++++ sys/net/application_layer/nanocoap/nanocoap.c
+@@ -1224,7 +1224,48 @@
+ ssize_t coap_opt_add_uri_query2(coap_pkt_t *pkt, const char *key, size_t key_len,
+                                 const char *val, size_t val_len)
+ {
+-    /* MASKED - implement this function */
++    assert(pkt && key && key_len);
++    assert((val_len == 0) || (val && val_len));
++
++    if (pkt->options_len >= CONFIG_NANOCOAP_NOPTS_MAX) {
++        return -ENOSPC;
++    }
++
++    size_t query_len = key_len + (val ? (1 + val_len) : 0);
++
++    uint16_t lastonum = (pkt->options_len)
++            ? pkt->options[pkt->options_len - 1].opt_num : 0;
++    assert(COAP_OPT_URI_QUERY >= lastonum);
++
++    /* calculate total option length (header + value) */
++    uint8_t dummy[3] = { 0 };
++    size_t optlen = _put_delta_optlen(dummy, 1, 4, COAP_OPT_URI_QUERY - lastonum);
++    optlen += _put_delta_optlen(dummy, 0, 0, query_len);
++    optlen += query_len;
++    if (pkt->payload_len < optlen) {
++        return -ENOSPC;
++    }
++
++    /* write option header */
++    uint8_t *bufpos = pkt->payload;
++    *bufpos = 0;
++    unsigned n = _put_delta_optlen(bufpos, 1, 4, COAP_OPT_URI_QUERY - lastonum);
++    n = _put_delta_optlen(bufpos, n, 0, query_len);
++
++    /* write key=value after option header */
++    memcpy(bufpos + n, key, key_len);
++    if (val) {
++        bufpos[n + key_len] = '=';
++        memcpy(bufpos + n + key_len + 1, val, val_len);
++    }
++
++    pkt->options[pkt->options_len].opt_num = COAP_OPT_URI_QUERY;
++    pkt->options[pkt->options_len].offset = pkt->payload - pkt->buf;
++    pkt->options_len++;
++    pkt->payload += optlen;
++    pkt->payload_len -= optlen;
++
++    return optlen;
+ }
+ 
+ ssize_t coap_opt_add_opaque(coap_pkt_t *pkt, uint16_t optnum, const void *val, size_t val_len)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-nanocoap
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/application_layer/nanocoap
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 148561	  36040	  78120	 262721	  40241	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+............
+nanocoap_tests.test_nanocoap__add_uri_query2 (tests/unittests/tests-nanocoap/tests-nanocoap.c 468) exp 4 was 5
+.........................
+run 37 failures 1
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc635a4000; bottom 0x00000043f000; size: 0x7ffc63165000 (140721970892800)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

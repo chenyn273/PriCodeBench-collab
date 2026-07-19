@@ -1,0 +1,80 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation follows the same pattern as `ztimer_convert_shift_up_init`:
+
+1. Sets `max_value` to `UINT32_MAX` (consistent with the shift and frac modules)
+2. Calls `ztimer_convert_init` to initialize the base `ztimer_convert_t` (sets `lower`, `lower_entry`, `max_value`, and `block_pm_mode`)
+3. Assigns the module-specific ops table `_ztimer_convert_muldiv64_ops`
+4. Sets the `mul` and `div` fields on the `ztimer_convert_muldiv64_t` struct
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/ztimer/convert_muldiv64.c
++++ sys/ztimer/convert_muldiv64.c
+@@ -108,5 +108,10 @@
+     ztimer_convert_muldiv64_t *ztimer_convert_muldiv64, ztimer_clock_t *lower,
+     unsigned div, unsigned mul)
+ {
+-    /* MASKED - implement this function */
++    uint32_t max_value = UINT32_MAX;
++
++    ztimer_convert_init(&ztimer_convert_muldiv64->super, lower, max_value);
++    ztimer_convert_muldiv64->super.super.ops = &_ztimer_convert_muldiv64_ops;
++    ztimer_convert_muldiv64->mul = mul;
++    ztimer_convert_muldiv64->div = div;
+ }
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ztimer
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+   text	   data	    bss	    dec	    hex	filename
+ 110611	  34200	  78120	 222931	  366d3	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..........
+ztimer_tests.test_ztimer_convert_muldiv64_set_slowdown (tests/unittests/tests-ztimer/tests-ztimer-convert-muldiv64.c 185) exp 4294968 was 0
+......
+run 16 failures 1
+
+native: exiting
+
+--- stderr ---
+==363==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffff5c0b000; bottom 0x000000436000; size: 0x7ffff57d5000 (140737312018432)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+==363==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+
+
+

@@ -1,0 +1,243 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's a summary of what `fib_sr_get_route` does:
+
+1. **Parameter validation** - Returns `-EFAULT` if any required pointer is NULL or dst_size is 0
+2. **Consecutive search support** - If `*fib_sr` is non-NULL, skips entries up to and including that source route (for iterating through multiple matching routes)
+3. **Find matching source route** - Iterates the source route headers looking for one whose destination matches `dst` exactly (`UNIVERSAL_ADDRESS_EQUAL`), checking lifetimes along the way
+4. **Partial route fallback** - If no exact match, tries `_fib_create_sr_from_partial` to build a route from an existing partial path
+5. **RP signaling** - If still no route, signals registered routing protocols (`FIB_MSG_RP_SIGNAL_UNREACHABLE_DESTINATION`) and retries the search
+6. **Buffer size check** - Counts hops in the path; returns `-ENOBUFS` with the required counts if `addr_list_elements` is too small
+7. **Copy addresses** - Copies route hop addresses into `addr_list`, either in forward or reverse order based on the `reverse` flag
+8. **Return route metadata** - Sets `sr_iface_id`, `sr_flags`, `*fib_sr`, and returns 0 (equal flags) or 1 (distinct flags)
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -1303,7 +1303,164 @@
+                      uint8_t *addr_list, size_t *addr_list_elements, size_t *element_size,
+                      bool reverse, fib_sr_t **fib_sr)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&(table->mtx_access));
++
++    if ((dst == NULL) || (dst_size == 0) || (sr_iface_id == NULL)
++        || (sr_flags == NULL) || (addr_list == NULL) || (addr_list_elements == NULL)
++        || (element_size == NULL) || (fib_sr == NULL)) {
++        mutex_unlock(&(table->mtx_access));
++        return -EFAULT;
++    }
++
++    /* determine where to start searching; if the caller provides a previous
++     * fib_sr then we skip all entries up to and including that one
++     */
++    size_t start_idx = 0;
++    if (*fib_sr != NULL) {
++        for (size_t i = 0; i < table->size; ++i) {
++            if (&(table->data.source_routes->headers[i]) == *fib_sr) {
++                start_idx = i + 1;
++                break;
++            }
++        }
++    }
++
++    fib_sr_t *hit = NULL;
++    int check_free_entry = -1;
++    for (size_t i = 0; i < table->size; ++i) {
++        if (table->data.source_routes->headers[i].sr_lifetime == 0) {
++            /* remember the first free slot for potential partial route creation */
++            if (check_free_entry == -1) {
++                check_free_entry = i;
++            }
++            continue;
++        }
++
++        if (i < start_idx) {
++            continue;
++        }
++
++        if (fib_sr_check_lifetime(&(table->data.source_routes->headers[i])) == -ENOENT) {
++            continue;
++        }
++
++        if (table->data.source_routes->headers[i].sr_dest == NULL) {
++            continue;
++        }
++
++        size_t addr_size_match = dst_size << 3;
++        if (UNIVERSAL_ADDRESS_EQUAL == universal_address_compare(
++                table->data.source_routes->headers[i].sr_dest->address,
++                dst, &addr_size_match)) {
++            hit = &(table->data.source_routes->headers[i]);
++            break;
++        }
++    }
++
++    /* if no exact match, try to find a partial path and create a new sr */
++    if (hit == NULL) {
++        int error = 0;
++        hit = _fib_create_sr_from_partial(table, dst, dst_size, check_free_entry, &error);
++        if (hit == NULL) {
++            /* ask the RPs if they can provide a route */
++            if (fib_signal_rp(table, FIB_MSG_RP_SIGNAL_UNREACHABLE_DESTINATION,
++                              dst, dst_size, *sr_flags) == 0) {
++                /* RPs provided a route; search again */
++                for (size_t i = start_idx; i < table->size; ++i) {
++                    if (table->data.source_routes->headers[i].sr_lifetime == 0) {
++                        continue;
++                    }
++
++                    if (fib_sr_check_lifetime(&(table->data.source_routes->headers[i])) == -ENOENT) {
++                        continue;
++                    }
++
++                    if (table->data.source_routes->headers[i].sr_dest == NULL) {
++                        continue;
++                    }
++
++                    size_t addr_size_match = dst_size << 3;
++                    if (UNIVERSAL_ADDRESS_EQUAL == universal_address_compare(
++                            table->data.source_routes->headers[i].sr_dest->address,
++                            dst, &addr_size_match)) {
++                        hit = &(table->data.source_routes->headers[i]);
++                        break;
++                    }
++                }
++            }
++
++            if (hit == NULL) {
++                mutex_unlock(&(table->mtx_access));
++                return (error != 0) ? error : -EHOSTUNREACH;
++            }
++        }
++        else if (error != 0) {
++            /* partial route was created but RPs couldn't extend it */
++            mutex_unlock(&(table->mtx_access));
++            return error;
++        }
++    }
++
++    /* count the number of hops in the path */
++    size_t count = 0;
++    fib_sr_entry_t *elt = NULL;
++    LL_FOREACH(hit->sr_path, elt) {
++        count++;
++    }
++
++    /* check if the provided addr_list is large enough */
++    if (*addr_list_elements < count) {
++        *addr_list_elements = count;
++        *element_size = hit->sr_path->address->address_size;
++        mutex_unlock(&(table->mtx_access));
++        return -ENOBUFS;
++    }
++
++    /* store the route addresses */
++    *addr_list_elements = count;
++    *element_size = hit->sr_path->address->address_size;
++
++    size_t addr_pos = 0;
++    if (reverse) {
++        /* collect addresses in reverse order: walk to the end first */
++        fib_sr_entry_t *entries[count];
++        size_t idx = 0;
++        LL_FOREACH(hit->sr_path, elt) {
++            entries[idx++] = elt;
++        }
++        for (size_t i = count; i > 0; --i) {
++            size_t sz = *element_size;
++            universal_address_get_address(entries[i - 1]->address,
++                                          &addr_list[addr_pos], &sz);
++            addr_pos += *element_size;
++        }
++    }
++    else {
++        LL_FOREACH(hit->sr_path, elt) {
++            size_t sz = *element_size;
++            universal_address_get_address(elt->address,
++                                          &addr_list[addr_pos], &sz);
++            addr_pos += *element_size;
++        }
++    }
++
++    /* set the output values */
++    *sr_iface_id = hit->sr_iface_id;
++
++    int ret;
++    if (hit->sr_flags == *sr_flags) {
++        ret = 0;
++    }
++    else {
++        ret = 1;
++    }
++    *sr_flags = hit->sr_flags;
++
++    /* only overwrite fib_sr when a matching sr was found */
++    *fib_sr = hit;
++
++    mutex_unlock(&(table->mtx_access));
++    return ret;
+ }
+ 
+ /* print functions */
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/tests/unittests/tests-fib_sr
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/div
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 128000	  36808	  86856	 251664	  3d710	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..........
+fib_sr_tests.test_fib_sr_10_create_sr_with_hops_and_get_a_route (tests/unittests/tests-fib_sr/tests-fib_sr.c 495) exp 0 was -14
+.
+fib_sr_tests.test_fib_sr_11_create_sr_with_hops_and_get_a_partial_route (tests/unittests/tests-fib_sr/tests-fib_sr.c 566) exp 0 was -14
+.
+run 12 failures 2
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd8f9b6000; bottom 0x000000439000; size: 0x7ffd8f57d000 (140727008350208)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,164 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's a summary of what `unicoap_options_add` does:
+
+1. **Validate inputs** — asserts that the storage buffer is initialized and value_size is within limits; returns `-ENOBUFS` if max option count reached
+2. **Find insertion index** — scans the sorted entries array to find where the new option belongs (options must be sorted by number)
+3. **Compute delta** — calculates the CoAP delta (option number difference from the preceding option)
+4. **Compute encoded size** — uses `_option_size` to determine how many bytes the new option will occupy in the storage buffer
+5. **Adjust next option's delta** — if inserting before an existing option, that option's delta encoding must change (it now references the new option instead of the previous one). This is done in-place via `memmove` to grow/shrink the extended delta field, then rewriting the header with `_write_head_partial`
+6. **Save destination** — records where to write the new option before `_shift_options` modifies data pointers
+7. **Shift storage buffer** — uses `_shift_options` to move existing encoded options right by `option_size` bytes
+8. **Write the new option** — encodes delta + length header and value into the storage buffer
+9. **Update entries array** — shifts entries to make room, then fills in the new entry's `data`, `size`, and `number`
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/application_layer/unicoap/options.c
++++ sys/net/application_layer/unicoap/options.c
+@@ -588,7 +588,91 @@
+ int unicoap_options_add(unicoap_options_t* options, unicoap_option_number_t number,
+                         const uint8_t* value, size_t value_size)
+ {
+-    /* MASKED - implement this function */
++    assert(options->entries->data);
++    assert(value_size <= UNICOAP_UINT_MAX);
++
++    if (options->option_count >= CONFIG_UNICOAP_OPTIONS_MAX) {
++        return -ENOBUFS;
++    }
++
++    /* Find insertion index: options are sorted by number */
++    size_t i = 0;
++    for (; i < options->option_count; i += 1) {
++        if (options->entries[i].number > number) {
++            break;
++        }
++    }
++
++    /* Compute delta for the new option */
++    uint16_t delta = (i > 0) ? (number - options->entries[i - 1].number) : number;
++
++    /* Compute encoded size of the new option */
++    ssize_t option_size = _option_size(delta, value_size);
++    if (option_size < 0) {
++        return (int)option_size;
++    }
++
++    /* If inserting before an existing option, that option's delta changes.
++     * Adjust its delta encoding in-place first. */
++    if (i < options->option_count) {
++        uint16_t new_next_delta = options->entries[i].number - number;
++        uint8_t old_delta_nibble = DECODE_DELTA_NIBBLE(*options->entries[i].data);
++        ssize_t old_ext_delta_size = _uint_extended_size_from_nibble(old_delta_nibble);
++        ssize_t new_ext_delta_size = _uint_extended_size(new_next_delta);
++        if (new_ext_delta_size < 0) {
++            return (int)new_ext_delta_size;
++        }
++
++        ssize_t diff = new_ext_delta_size - old_ext_delta_size;
++        if (diff != 0) {
++            uint8_t* content_start = options->entries[i].data + 1 + old_ext_delta_size;
++            size_t remainder = options->storage_size
++                - ((uintptr_t)content_start - (uintptr_t)options->entries->data);
++
++            size_t new_storage_size = options->storage_size + diff;
++            if (new_storage_size > options->storage_capacity) {
++                OPTIONS_DEBUG("storage too small for delta change\n");
++                return -ENOBUFS;
++            }
++            memmove(content_start + diff, content_start, remainder);
++            options->storage_size = new_storage_size;
++            options->entries[i].size += diff;
++            _update_option_entries_with_storage_diff(options, i + 1, diff);
++        }
++
++        uint8_t length_nibble = DECODE_LENGTH_NIBBLE(*options->entries[i].data);
++        uint8_t* cursor = options->entries[i].data;
++        _write_head_partial(&cursor, new_next_delta, length_nibble);
++    }
++
++    /* Compute destination before _shift_options changes the data pointers */
++    uint8_t* dest;
++    if (i > 0) {
++        dest = options->entries[i - 1].data + options->entries[i - 1].size;
++    }
++    else {
++        dest = options->entries[0].data;
++    }
++    uint8_t* new_option_data = dest;
++
++    /* Shift existing options in storage buffer to make room for the new option */
++    int res = _shift_options(options, i, option_size);
++    if (res < 0) {
++        return res;
++    }
++
++    /* Write the new option into the storage buffer */
++    _write_option(&dest, delta, value, value_size);
++
++    /* Shift entries in the lookup array to make room for the new entry */
++    _shift_option_entries(options, i, 1);
++
++    /* Fill in the new entry */
++    options->entries[i].data = new_option_data;
++    options->entries[i].size = option_size;
++    options->entries[i].number = number;
++
++    return 0;
+ }
+ 
+ int unicoap_options_add_values_joined(unicoap_options_t* options, unicoap_option_number_t number,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-unicoap
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/iolist
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/application_layer/unicoap
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/net/application_layer/unicoap/drivers/rfc7252/common/pdu
+   text	   data	    bss	    dec	    hex	filename
+ 125467	  43144	  82464	 251075	  3d4c3	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+................
+OK (16 tests)
+
+native: exiting
+
+--- stderr ---
+==355==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc98457000; bottom 0x00000043c000; size: 0x7ffc9801b000 (140722858733568)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

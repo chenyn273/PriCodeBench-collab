@@ -1,0 +1,107 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation follows the same pattern as `isrpipe_read_timeout` but extends it to read **all** `count` bytes:
+
+1. Try non-blocking `tsrb_get` first — if all bytes are available, return immediately
+2. Track how many bytes have been read so far
+3. Set up a ztimer timeout (same `_cb`/`_isrpipe_timeout_t` mechanism)
+4. Loop until `count` bytes accumulated:
+   - When `tsrb_get` returns data, advance the buffer pointer and reset the timeout (per the header doc: "each time a byte or burst of bytes is received, the timeout is reset")
+   - When `tsrb_get` returns 0 (empty), block on `mutex_lock`; if timeout flag is set, return `-ETIMEDOUT`
+5. Once all bytes are read, remove the timer and return the total count
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/isrpipe/read_timeout/read_timeout.c
++++ sys/isrpipe/read_timeout/read_timeout.c
+@@ -60,5 +60,33 @@
+ 
+ int isrpipe_read_all_timeout(isrpipe_t *isrpipe, uint8_t *buffer, size_t count, uint32_t timeout)
+ {
+-    /* MASKED - implement this function */
++    int res = tsrb_get(&isrpipe->tsrb, buffer, count);
++    if (res == (int)count) {
++        return res;
++    }
++
++    size_t read = (res > 0) ? (size_t)res : 0;
++    _isrpipe_timeout_t _timeout = { .mutex = &isrpipe->mutex, .flag = 0 };
++    ztimer_t timer = { .callback = _cb, .arg = &_timeout };
++
++    ztimer_set(ZTIMER_USEC, &timer, timeout);
++    while (read < count) {
++        if ((res = tsrb_get(&isrpipe->tsrb, buffer + read, count - read)) > 0) {
++            read += res;
++            if (read < count) {
++                _timeout.flag = 0;
++                ztimer_set(ZTIMER_USEC, &timer, timeout);
++            }
++        }
++        else {
++            mutex_lock(&isrpipe->mutex);
++            if (_timeout.flag) {
++                ztimer_remove(ZTIMER_USEC, &timer);
++                return -ETIMEDOUT;
++            }
++        }
++    }
++
++    ztimer_remove(ZTIMER_USEC, &timer);
++    return (int)read;
+ }
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/tests/unittests/tests-isrpipe
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/isrpipe
+"make" -C /workspace/sys/isrpipe/read_timeout
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/tsrb
+"make" -C /workspace/sys/ztimer
+   text	   data	    bss	    dec	    hex	filename
+  96021	  34296	  82728	 213045	  34035	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........
+OK (8 tests)
+
+native: exiting
+
+--- stderr ---
+==387==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd0c097000; bottom 0x000000431000; size: 0x7ffd0bc66000 (140724801003520)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+==387==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+
+
+

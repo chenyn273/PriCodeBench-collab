@@ -1,0 +1,90 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation handles three cases:
+
+1. **Node is the tail** (`list->next == node`): If it's the only element, set `list->next = NULL`. Otherwise, find the predecessor, make it the new tail, and relink.
+2. **Node is elsewhere**: Find the predecessor via `clist_find_before`, unlink the node.
+3. **Node not found**: `clist_find_before` returns NULL, so we return NULL.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- core/lib/include/clist.h
++++ core/lib/include/clist.h
+@@ -324,7 +324,24 @@
+  */
+ static inline clist_node_t *clist_remove(clist_node_t *list, clist_node_t *node)
+ {
+-    /* MASKED - implement this function */
++    if (list->next == node) {
++        if (list->next == list->next->next) {
++            list->next = NULL;
++        }
++        else {
++            list->next = clist_find_before(list, node);
++            list->next->next = node->next;
++        }
++        return node;
++    }
++    else {
++        clist_node_t *prev = clist_find_before(list, node);
++        if (prev) {
++            prev->next = node->next;
++            return node;
++        }
++    }
++    return NULL;
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-core
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 135167	  51816	  96776	 283759	  4546f	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..............................................................................................................
+OK (110 tests)
+
+native: exiting
+
+--- stderr ---
+/usr/bin/ld: warning: /tmp/build/bin/native64/tests_unittests.elf has a LOAD segment with RWX permissions
+==364==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff8e459000; bottom 0x000000440000; size: 0x7fff8e019000 (140735575855104)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+==364==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+
+
+

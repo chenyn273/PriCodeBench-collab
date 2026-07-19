@@ -1,0 +1,78 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's how `rtc_mktime` works:
+
+1. **Convert year** from `struct tm` convention (`tm_year` = years since 1900) to absolute year
+2. **Calculate days since RIOT_EPOCH**: `(year - RIOT_EPOCH) * 365` plus the number of leap years in that range (using the existing `_leap_years_since_epoch` helper)
+3. **Add day-of-year** using the existing `_yday` helper, which computes the cumulative days elapsed in the current year
+4. **Convert to seconds**: `days * DAY + hours * HOUR + minutes * MINUTE + seconds`
+
+This is the exact inverse of `rtc_localtime`, which iterates year-by-year subtracting seconds and then delegates to `rtc_tm_normalize` to break the remaining seconds into time components.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/rtc_utils/rtc_utils.c
++++ sys/rtc_utils/rtc_utils.c
+@@ -179,7 +179,10 @@
+ 
+ uint32_t rtc_mktime(const struct tm *t)
+ {
+-    /* MASKED - implement this function */
++    unsigned year = t->tm_year + 1900;
++    unsigned days = (year - RIOT_EPOCH) * 365 + _leap_years_since_epoch(year);
++    days += _yday(t->tm_mday, t->tm_mon, year);
++    return days * DAY + t->tm_hour * HOUR + t->tm_min * MINUTE + t->tm_sec;
+ }
+ 
+ void rtc_localtime(uint32_t time, struct tm *t)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-rtc
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/rtc_utils
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  91255	  32088	  78120	 201463	  312f7	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..........
+OK (10 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd4abb2000; bottom 0x000000430000; size: 0x7ffd4a782000 (140725852839936)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

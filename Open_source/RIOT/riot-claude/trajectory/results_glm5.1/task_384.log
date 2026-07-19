@@ -1,0 +1,89 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `ztimer_mock_advance` does:
+
+1. **Captures the current `now` and `target` values** before modifying state — this is important because `ztimer_mock_fire` resets `target` and `armed`.
+2. **Advances the clock**: `self->now = (now + val) & self->mask` — increments by `val` and applies the mask (handles counter width wrapping, same pattern as `ztimer_mock_jump`).
+3. **Fires the timer if the target was passed**: `(target - now) <= val` uses unsigned subtraction to correctly compute the distance to the target. If that distance is less than or equal to the increment `val`, the target was reached or passed, so `ztimer_mock_fire` is called to trigger the handler.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/ztimer/mock.c
++++ sys/ztimer/mock.c
+@@ -33,7 +33,17 @@
+ 
+ void ztimer_mock_advance(ztimer_mock_t *self, uint32_t val)
+ {
+-    /* MASKED - implement this function */
++    uint32_t now = self->now;
++    uint32_t target = self->target;
++
++    self->now = (now + val) & self->mask;
++
++    DEBUG("zmock_advance: now=0x%08" PRIx32 ", target=0x%08" PRIx32 " (%u)\n",
++          self->now, self->target, self->armed);
++
++    if (self->armed && ((target - now) <= val)) {
++        ztimer_mock_fire(self);
++    }
+ }
+ 
+ void ztimer_mock_jump(ztimer_mock_t *self, uint32_t target)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ztimer64
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+  90292	  32504	  78368	 201164	  311cc	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..
+ztimer64_tests.test_ztimer64_set (tests/unittests/tests-ztimer64/tests-ztimer64-core.c 106) exp 2 was 1
+..
+ztimer64_tests.test_ztimer64_set_at (tests/unittests/tests-ztimer64/tests-ztimer64-core.c 164) exp 1 was 0
+...
+run 7 failures 2
+
+native: exiting
+
+--- stderr ---
+==373==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc44a34000; bottom 0x000000430000; size: 0x7ffc44604000 (140721455644672)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+==373==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+
+
+

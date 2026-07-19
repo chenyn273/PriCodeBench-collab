@@ -1,0 +1,82 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `clif_get_attr_type` does:
+
+- Iterates over all known attribute types (using the `_attr_to_str` and `_attr_to_size` lookup tables)
+- For each, checks if the input length matches the known attribute name length AND the string content matches (via `strncmp`)
+- If a match is found, returns the corresponding `clif_attr_type_t` enum value
+- If no known attribute matches, returns `CLIF_ATTR_EXT` (the extension type)
+
+This is the inverse of `clif_attr_type_to_str`, which maps type → string. This function maps string → type.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/clif/clif.c
++++ sys/clif/clif.c
+@@ -364,7 +364,14 @@
+ 
+ clif_attr_type_t clif_get_attr_type(const char *input, size_t input_len)
+ {
+-    /* MASKED - implement this function */
++    assert(input);
++    for (unsigned i = 0; i < ATTRS_NUMOF; i++) {
++        if (_attr_to_size[i] == input_len &&
++            strncmp(input, _attr_to_str[i], input_len) == 0) {
++            return (clif_attr_type_t)i;
++        }
++    }
++    return CLIF_ATTR_EXT;
+ }
+ 
+ int clif_init_attr(clif_attr_t *attr, clif_attr_type_t type)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-clif
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/sys/clif
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+   text	   data	    bss	    dec	    hex	filename
+  94268	  35080	  78120	 207468	  32a6c	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.......
+OK (7 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd40e58000; bottom 0x000000432000; size: 0x7ffd40a26000 (140725687836672)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

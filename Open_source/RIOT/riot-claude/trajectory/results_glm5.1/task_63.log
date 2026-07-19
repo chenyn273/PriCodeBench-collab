@@ -1,0 +1,81 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. The `color_rgb_complementary` function:
+
+1. Converts the input RGB color to HSV using the existing `color_rgb2hsv`
+2. Shifts the hue by 180 degrees (the standard complementary color operation)
+3. Wraps the hue back into the [0, 360) range if it exceeds 360
+4. Converts back to RGB using the existing `color_hsv2rgb`
+
+This follows the Adobe Illustrator method described in the header comment — the complementary color is the color on the opposite side of the color wheel (hue rotated 180°), which is distinct from the simpler `color_rgb_invert` that just XORs each channel with 0xFF.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/color/color.c
++++ sys/color/color.c
+@@ -199,5 +199,12 @@
+ 
+ void color_rgb_complementary(const color_rgb_t *rgb, color_rgb_t *comp_rgb)
+ {
+-    /* MASKED - implement this function */
+-}
++    color_hsv_t hsv;
++
++    color_rgb2hsv((color_rgb_t *)rgb, &hsv);
++    hsv.h = (hsv.h + 180.0f);
++    if (hsv.h >= 360.0f) {
++        hsv.h -= 360.0f;
++    }
++    color_hsv2rgb(&hsv, comp_rgb);
++}
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-color
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/color
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+  98042	  32408	  78120	 208570	  32eba	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.........
+OK (9 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fffbae35000; bottom 0x000000432000; size: 0x7fffbaa03000 (140736324448256)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

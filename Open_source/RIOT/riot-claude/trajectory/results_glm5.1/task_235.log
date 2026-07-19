@@ -1,0 +1,89 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation:
+
+1. **Hashes the request method** (`coap_get_code_raw`) — different methods (GET vs POST) must produce different cache keys.
+2. **Hashes options** via `_cache_key_digest_opts` with `include_etag=false` and `include_blockwise=false` — ETag is excluded per RFC 7252 §5.4.2 (proxy-aware), and blockwise options are excluded so block-transfer parts map to the same cache entry.
+3. **Truncates the SHA-256 digest** to `CONFIG_NANOCOAP_CACHE_KEY_LENGTH` bytes (8 by default), which matches how `cache_key` is sized throughout the codebase (`uint8_t cache_key[CONFIG_NANOCOAP_CACHE_KEY_LENGTH]`).
+
+This differs from `nanocoap_cache_key_options_generate` (which doesn't include method, includes ETag, and outputs full 32-byte digest) and `nanocoap_cache_key_blockreq_options_generate` (same but excludes blockwise).
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/application_layer/nanocoap/cache.c
++++ sys/net/application_layer/nanocoap/cache.c
+@@ -135,7 +135,15 @@
+ 
+ void nanocoap_cache_key_generate(const coap_pkt_t *req, uint8_t *cache_key)
+ {
+-    /* MASKED - implement this function */
++    sha256_context_t ctx;
++    uint8_t digest[SHA256_DIGEST_LENGTH];
++
++    sha256_init(&ctx);
++    uint8_t method = coap_get_code_raw((coap_pkt_t *)req);
++    sha256_update(&ctx, &method, sizeof(method));
++    _cache_key_digest_opts(req, &ctx, false, false);
++    sha256_final(&ctx, digest);
++    memcpy(cache_key, digest, CONFIG_NANOCOAP_CACHE_KEY_LENGTH);
+ }
+ 
+ ssize_t nanocoap_cache_key_compare(uint8_t *cache_key1, uint8_t *cache_key2)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-nanocoap_cache
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/crypto
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/hashes
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/application_layer/nanocoap
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+   text	   data	    bss	    dec	    hex	filename
+ 141305	  36080	  81288	 258673	  3f271	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+...
+nanocoap_cache_entry_tests.test_nanocoap_cache__cachekey (tests/unittests/tests-nanocoap_cache/tests-nanocoap_cache.c 68) nanocoap_cache_key_compare(digest1, digest2) < 0
+..
+run 5 failures 1
+
+native: exiting
+
+--- stderr ---
+/bin/sh: 1: hexdump: not found
+==454==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd8a268000; bottom 0x00000043e000; size: 0x7ffd89e2a000 (140726916784128)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

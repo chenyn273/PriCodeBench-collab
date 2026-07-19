@@ -1,0 +1,82 @@
+============================================================
+=== Claude Session ===
+============================================================
+The `crc32` function is implemented. It follows the standard CRC-32 algorithm:
+
+1. Initialize `result` to `0xFFFFFFFF`
+2. For each byte, XOR it into the low 8 bits of `result`, then process through `crc32_for_byte`
+3. Final XOR with `0xFFFFFFFF` (inversion) before returning
+
+This matches the polynomial `0xEDB88320` (reflected form of the IEEE 802.3 CRC-32) used by the table and the `crc32_for_byte` helper.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/checksum/crc32.c
++++ sys/checksum/crc32.c
+@@ -105,7 +105,15 @@
+ 
+ uint32_t crc32(const void *buf, size_t size)
+ {
+-    /* MASKED - implement this function */
++    const uint8_t *data = buf;
++    uint32_t result = 0xFFFFFFFF;
++
++    for (size_t i = 0; i < size; i++) {
++        result ^= data[i];
++        result = crc32_for_byte(result);
++    }
++
++    return result ^ 0xFFFFFFFF;
+ }
+ 
+ /** @} */
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-checksum
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/checksum
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 123096	  42464	  78120	 243680	  3b7e0	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..........................................................
+OK (58 tests)
+
+native: exiting
+
+--- stderr ---
+==377==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd56444000; bottom 0x00000043a000; size: 0x7ffd5600a000 (140726046334976)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

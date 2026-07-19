@@ -1,0 +1,79 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation follows the existing patterns in the file:
+
+1. Lock `_lock_for_counter` to safely access `_lock_counter`
+2. Increment `_lock_counter` with saturating arithmetic (matching the `UINT_MAX` guard in `gnrc_netreg_release_shared`)
+3. Unlock `_lock_for_counter` — shared readers don't hold `_lock_wait_exclusive`; that's only held by exclusive users to block other exclusive access
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/netreg/gnrc_netreg.c
++++ sys/net/gnrc/netreg/gnrc_netreg.c
+@@ -67,7 +67,13 @@
+ }
+ 
+ void gnrc_netreg_acquire_shared(void) {
+-    /* MASKED - implement this function */
++    mutex_lock(&_lock_for_counter);
++
++    if (_lock_counter != UINT_MAX) {
++        _lock_counter += 1;
++    }
++
++    mutex_unlock(&_lock_for_counter);
+ }
+ 
+ void gnrc_netreg_release_shared(void) {
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-netreg
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/net/gnrc/netreg
+   text	   data	    bss	    dec	    hex	filename
+  81242	  33016	  78376	 192634	  2f07a	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.............
+OK (13 tests)
+
+native: exiting
+
+--- stderr ---
+==334==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd599ff000; bottom 0x00000042d000; size: 0x7ffd595d2000 (140726102728704)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

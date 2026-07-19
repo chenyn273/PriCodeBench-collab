@@ -1,0 +1,116 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `fib_sr_entry_get_address` does:
+
+1. **NULL checks** (`-EFAULT`): Validates `table`, `fib_sr`, `sr_entry`, `addr`, and `addr_size` are not NULL — before acquiring the mutex to avoid dereferencing NULL.
+2. **Route membership check** (`-EFAULT`): Acquires the mutex, then verifies `fib_sr` belongs to the table via `fib_is_sr_in_table`.
+3. **Lifetime check** (`-ENOENT`): Checks the source route hasn't expired via `fib_sr_check_lifetime`.
+4. **Entry membership in path** (`-EFAULT`): Walks the `fib_sr->sr_path` linked list to confirm `sr_entry` actually belongs to this route's path.
+5. **Address retrieval** (`-ENOMEM`): Calls `universal_address_get_address` to copy the address; returns `-ENOMEM` if the provided buffer is too small.
+6. **Success** (`0`): Unlocks the mutex and returns.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -1156,7 +1156,43 @@
+ int fib_sr_entry_get_address(fib_table_t *table, fib_sr_t *fib_sr, fib_sr_entry_t *sr_entry,
+                              uint8_t *addr, size_t *addr_size)
+ {
+-    /* MASKED - implement this function */
++    if ((table == NULL) || (fib_sr == NULL) || (sr_entry == NULL) || (addr == NULL)
++        || (addr_size == NULL)) {
++        return -EFAULT;
++    }
++
++    mutex_lock(&(table->mtx_access));
++    if (fib_is_sr_in_table(table, fib_sr) == -ENOENT) {
++        mutex_unlock(&(table->mtx_access));
++        return -EFAULT;
++    }
++
++    if (fib_sr_check_lifetime(fib_sr) == -ENOENT) {
++        mutex_unlock(&(table->mtx_access));
++        return -ENOENT;
++    }
++
++    bool found = false;
++    fib_sr_entry_t *elt = NULL;
++    LL_FOREACH(fib_sr->sr_path, elt) {
++        if (sr_entry == elt) {
++            found = true;
++            break;
++        }
++    }
++
++    if (!found) {
++        mutex_unlock(&(table->mtx_access));
++        return -EFAULT;
++    }
++
++    if (universal_address_get_address(sr_entry->address, addr, addr_size) == NULL) {
++        mutex_unlock(&(table->mtx_access));
++        return -ENOMEM;
++    }
++
++    mutex_unlock(&(table->mtx_access));
++    return 0;
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-fib_sr
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/div
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 127077	  36808	  86856	 250741	  3d375	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+............
+OK (12 tests)
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffea7cfc000; bottom 0x000000439000; size: 0x7ffea78c3000 (140731709403136)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,92 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implemented `credman_get`. The function:
+
+1. Asserts the output credential pointer is non-NULL
+2. Locks the mutex for thread safety
+3. Uses `_find_credential_pos` to look up the credential by tag and type
+4. If found, copies it to the output parameter and returns `CREDMAN_OK`
+5. If not found, returns `CREDMAN_NOT_FOUND`
+6. Unlocks the mutex before returning in all paths
+
+This follows the same patterns used by `credman_add` and `credman_delete` in the same file.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/credman/credman.c
++++ sys/net/credman/credman.c
+@@ -373,7 +373,16 @@
+ int credman_get(credman_credential_t *credential, credman_tag_t tag,
+                 credman_type_t type)
+ {
+-    /* MASKED - implement this function */
++    assert(credential);
++    mutex_lock(&_mutex);
++    int pos = _find_credential_pos(tag, type, NULL);
++    if (pos >= 0) {
++        *credential = credentials[pos];
++        mutex_unlock(&_mutex);
++        return CREDMAN_OK;
++    }
++    mutex_unlock(&_mutex);
++    return CREDMAN_NOT_FOUND;
+ }
+ 
+ void credman_delete(credman_tag_t tag, credman_type_t type)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+rm -Rf /tmp/build/pkg/tiny-asn1
+mkdir -p $(dirname /tmp/build/pkg/tiny-asn1)
+cp -a /workspace/build/pkg/tiny-asn1/ /tmp/build/pkg/tiny-asn1
+touch /tmp/build/pkg/tiny-asn1/.prepared
+"make" -C /workspace/pkg/tiny-asn1/ 
+"make" -C /tmp/build/pkg/tiny-asn1/src -f /workspace/Makefile.base MODULE=tiny-asn1
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/tests/unittests/tests-credman
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/credman
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  94817	  32832	  78440	 206089	  32509	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........
+OK (8 tests)
+
+native: exiting
+
+--- stderr ---
+==380==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff2c524000; bottom 0x000000431000; size: 0x7fff2c0f3000 (140733932580864)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,74 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation delegates to `ipv6_addr_split_int` which:
+
+1. Searches `addr_str` for the `'/'` separator
+2. Replaces the `/` with `'\0'`, effectively splitting the string (e.g., `"2001:db8::1/64"` becomes `"2001:db8::1"`)
+3. Returns `atoi("64")` = `64`, or the default value `128` if no `/` was found
+
+This matches the documented behavior: returns the prefix length, or 128 if none specified.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/ipv6/addr.h
++++ sys/include/net/ipv6/addr.h
+@@ -729,7 +729,7 @@
+  */
+ static inline int ipv6_addr_split_prefix(char *addr_str)
+ {
+-    /* MASKED - implement this function */
++    return ipv6_addr_split_int(addr_str, '/', 128);
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ipv6_addr
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 193826	  41928	  78152	 313906	  4ca32	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+............................................................................................
+OK (92 tests)
+
+native: exiting
+
+--- stderr ---
+==335==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffdf2a45000; bottom 0x00000044c000; size: 0x7ffdf25f9000 (140728669802496)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

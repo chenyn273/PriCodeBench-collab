@@ -1,0 +1,166 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `gnrc_ipv6_nib_ft_iter` does:
+
+1. **Acquires the NIB lock** for thread safety (matching `nc_iter`/`pl_iter` patterns)
+2. **Iterates in two phases** using the `*state` pointer to track progress:
+   - **Phase 1 — Default Router List**: Iterates via `_nib_drl_iter`, converting entries with `_nib_drl_ft_get` (these appear as default routes with `dst_len == 0`)
+   - **Phase 2 — Off-link entries**: Iterates via `_nib_offl_iter`, converting entries with `_nib_ft_get`. Only includes entries with mode `_FT`, `_DC`, or `_PL` with `_PFX_ON_LINK` flag (matching the header doc that says iteration includes the Forwarding Table, Destination Cache, Prefix List on-link entries, and Default Router List)
+3. **Filters** by `next_hop` (when non-NULL, only entries whose next-hop matches) and `iface` (when non-zero, only entries on that interface)
+4. **State tracking across phases**: Uses `_nib_offl_is_entry()` to detect whether `*state` points to an off-link entry (phase 2) or a default router entry (phase 1). When the DRL is exhausted, it transparently transitions to off-link iteration.
+5. **Returns** `true` when a matching entry is found (with `*state` updated for the next call), `false` when iteration is complete (with `*state` set to NULL)
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/network_layer/ipv6/nib/nib_ft.c
++++ sys/net/gnrc/network_layer/ipv6/nib/nib_ft.c
+@@ -124,7 +124,72 @@
+ bool gnrc_ipv6_nib_ft_iter(const ipv6_addr_t *next_hop, unsigned iface,
+                           void **state, gnrc_ipv6_nib_ft_t *fte)
+ {
+-    /* MASKED - implement this function */
++    _nib_dr_entry_t *entry;
++    bool res = false;
++
++    assert((state != NULL) && (fte != NULL));
++    _nib_acquire();
++    /* we use the state pointer to differentiate between the two iteration phases:
++     *  - NULL: start iterating the default router list
++     *  - a pointer in the range of _dsts[]: iterating the off-link entries
++     *  - any other pointer: iterating the default router list
++     */
++    entry = *state;
++    if ((entry != NULL) && _nib_offl_is_entry((_nib_offl_entry_t *)entry)) {
++        /* we are in the off-link entry iteration phase */
++        _nib_offl_entry_t *dst = (_nib_offl_entry_t *)entry;
++        while ((dst = _nib_offl_iter(dst)) != NULL) {
++            if ((dst->mode & (_FT | _DC)) ||
++                ((dst->mode & _PL) && (dst->flags & _PFX_ON_LINK))) {
++                _nib_ft_get(dst, fte);
++                if (((iface == 0) || (fte->iface == iface)) &&
++                    ((next_hop == NULL) ||
++                     ipv6_addr_equal(next_hop, &fte->next_hop))) {
++                    *state = dst;
++                    res = true;
++                    break;
++                }
++            }
++        }
++        if (dst == NULL) {
++            *state = NULL;
++        }
++    }
++    else {
++        /* iterate the default router list */
++        while ((entry = _nib_drl_iter(entry)) != NULL) {
++            _nib_drl_ft_get(entry, fte);
++            if (((iface == 0) || (fte->iface == iface)) &&
++                ((next_hop == NULL) ||
++                 ipv6_addr_equal(next_hop, &fte->next_hop))) {
++                *state = entry;
++                res = true;
++                break;
++            }
++        }
++        if (entry == NULL) {
++            /* switch to off-link entry iteration */
++            _nib_offl_entry_t *dst = NULL;
++            while ((dst = _nib_offl_iter(dst)) != NULL) {
++                if ((dst->mode & (_FT | _DC)) ||
++                    ((dst->mode & _PL) && (dst->flags & _PFX_ON_LINK))) {
++                    _nib_ft_get(dst, fte);
++                    if (((iface == 0) || (fte->iface == iface)) &&
++                        ((next_hop == NULL) ||
++                         ipv6_addr_equal(next_hop, &fte->next_hop))) {
++                        *state = dst;
++                        res = true;
++                        break;
++                    }
++                }
++            }
++            if (dst == NULL) {
++                *state = NULL;
++            }
++        }
++    }
++    _nib_release();
++    return res;
+ }
+ 
+ void gnrc_ipv6_nib_ft_print(const gnrc_ipv6_nib_ft_t *fte)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-gnrc_ipv6_nib
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/event
+"make" -C /workspace/sys/evtimer
+"make" -C /workspace/sys/fmt
+"make" -C /workspace/sys/frac
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/luid
+"make" -C /workspace/sys/net/crosslayer/inet_csum
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/net/link_layer/l2util
+"make" -C /workspace/sys/net/netif
+"make" -C /workspace/sys/net/network_layer/icmpv6
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/net/network_layer/ipv6/hdr
+"make" -C /workspace/sys/net/gnrc/netapi
+"make" -C /workspace/sys/random
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/net/gnrc/netif
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/net/gnrc/netreg
+"make" -C /workspace/sys/net/gnrc/network_layer/icmpv6
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6/hdr
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6/nib
+"make" -C /workspace/sys/net/gnrc/network_layer/ndp
+"make" -C /workspace/sys/net/gnrc/network_layer/sixlowpan/nd
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+"make" -C /workspace/sys/net/gnrc/netif/hdr
+   text	   data	    bss	    dec	    hex	filename
+ 313408	  72304	  92296	 478008	  74b38	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........................................................................................................................................................
+OK (152 tests)
+
+native: exiting
+
+--- stderr ---
+==606==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffdc22bd000; bottom 0x000000470000; size: 0x7ffdc1e4d000 (140727856451584)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

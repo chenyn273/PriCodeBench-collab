@@ -1,0 +1,114 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what the function does:
+
+1. **Iterates** over all 16 context entries in `_ctxs[]`
+2. For each entry, checks three conditions:
+   - `_valid(id)` — the context is still valid (lifetime hasn't expired, prefix_len > 0)
+   - `ipv6_addr_match_prefix(&ctx.prefix, addr) >= ctx.prefix_len` — the address matches the context's prefix at least up to the prefix length
+   - The matching prefix is **longer** than the current best (to select the most specific context)
+3. Returns the context with the **longest matching prefix**, or `NULL` if no context matches
+
+This follows the same patterns used by the neighboring functions in the file: mutex locking, `_valid()` for validity checks, and consistent debug output formatting.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/network_layer/sixlowpan/ctx/gnrc_sixlowpan_ctx.c
++++ sys/net/gnrc/network_layer/sixlowpan/ctx/gnrc_sixlowpan_ctx.c
+@@ -44,7 +44,28 @@
+ 
+ gnrc_sixlowpan_ctx_t *gnrc_sixlowpan_ctx_lookup_addr(const ipv6_addr_t *addr)
+ {
+-    /* MASKED - implement this function */
++    gnrc_sixlowpan_ctx_t *best = NULL;
++
++    mutex_lock(&_ctx_mutex);
++
++    for (uint8_t id = 0; id < GNRC_SIXLOWPAN_CTX_SIZE; id++) {
++        if (_valid(id) &&
++            (ipv6_addr_match_prefix(&(_ctxs[id].prefix), addr) >= _ctxs[id].prefix_len) &&
++            ((best == NULL) || (_ctxs[id].prefix_len > best->prefix_len))) {
++            best = &_ctxs[id];
++        }
++    }
++
++    if (best != NULL) {
++        DEBUG("6lo ctx: found context (%u, %s/%" PRIu8 ")\n",
++              (best->flags_id & GNRC_SIXLOWPAN_CTX_FLAGS_CID_MASK),
++              ipv6_addr_to_str(ipv6str, &best->prefix, sizeof(ipv6str)),
++              best->prefix_len);
++    }
++
++    mutex_unlock(&_ctx_mutex);
++
++    return best;
+ }
+ 
+ gnrc_sixlowpan_ctx_t *gnrc_sixlowpan_ctx_lookup_id(uint8_t id)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-sixlowpan_ctx
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/div
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/event
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/fmt
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/net/link_layer/l2util
+"make" -C /workspace/sys/net/netif
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/net/gnrc/netapi
+"make" -C /workspace/sys/net/gnrc/netif
+"make" -C /workspace/sys/net/gnrc/netreg
+"make" -C /workspace/sys/net/gnrc/network_layer/sixlowpan/ctx
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/net/gnrc/netif/hdr
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+   text	   data	    bss	    dec	    hex	filename
+ 125138	  38576	  85832	 249546	  3ceca	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.............
+OK (13 tests)
+
+native: exiting
+
+--- stderr ---
+==486==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffceedad000; bottom 0x00000043a000; size: 0x7ffcee973000 (140724311371776)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

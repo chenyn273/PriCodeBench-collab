@@ -1,0 +1,77 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation checks:
+
+1. **First 80 bits are zero** — `memcmp(addr, &ipv6_addr_unspecified, sizeof(ipv6_addr_t) - sizeof(ipv4_addr_t) - sizeof(uint16_t))` compares the first 10 bytes (80 bits) against the unspecified address (all zeros). Since `sizeof(ipv6_addr_t)` is 16, `sizeof(ipv4_addr_t)` is 4, and `sizeof(uint16_t)` is 2, this checks bytes 0–9.
+
+2. **Bits 81–96 are 0xffff** — `byteorder_ntohs(addr->u16[5]) == 0xffff` checks that the 6th 16-bit word (bytes 10–11) equals `0xffff`, matching the RFC 4291 section 2.5.5.2 definition of `::ffff:0:0/96`.
+
+This follows the same patterns used by `ipv6_addr_is_ipv4_compat` (which only checks the first 96 bits are zero) and `ipv6_addr_is_site_local` (which uses `byteorder_ntohs`).
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/ipv6/addr.h
++++ sys/include/net/ipv6/addr.h
+@@ -327,7 +327,10 @@
+  */
+ static inline bool ipv6_addr_is_ipv4_mapped(const ipv6_addr_t *addr)
+ {
+-    /* MASKED - implement this function */
++    return (memcmp(addr, &ipv6_addr_unspecified,
++                   sizeof(ipv6_addr_t) - sizeof(ipv4_addr_t) -
++                   sizeof(uint16_t)) == 0) &&
++           (byteorder_ntohs(addr->u16[5]) == 0xffff);
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ipv6_addr
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 193829	  41928	  78152	 313909	  4ca35	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+............................................................................................
+OK (92 tests)
+
+native: exiting
+
+--- stderr ---
+==336==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffe11808000; bottom 0x00000044c000; size: 0x7ffe113bc000 (140729187549184)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,100 @@
+============================================================
+=== Claude Session ===
+============================================================
+The `fib_sr_next` function has been implemented. Here's what it does:
+
+1. **Acquires the mutex** and validates inputs — returns `-EFAULT` if `fib_sr` or `sr_path_entry` is NULL, or the source route isn't in the table
+2. **Checks lifetime** — returns `-ENOENT` if the source route has expired
+3. **Advances the iterator** — if the current entry (`*sr_path_entry`) is NULL or has no next entry, returns `1` (end reached); otherwise updates `*sr_path_entry` to point to the next entry and returns `0` (success)
+
+This follows the same patterns as the other `fib_sr_*` functions in the file (mutex locking, parameter validation, lifetime checking) and matches the documented return values in the header.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -877,7 +877,26 @@
+ 
+ int fib_sr_next(fib_table_t *table, fib_sr_t *fib_sr, fib_sr_entry_t **sr_path_entry)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&(table->mtx_access));
++    if ((fib_sr == NULL) || (sr_path_entry == NULL)
++        || (fib_is_sr_in_table(table, fib_sr) == -ENOENT)) {
++        mutex_unlock(&(table->mtx_access));
++        return -EFAULT;
++    }
++
++    if (fib_sr_check_lifetime(fib_sr) == -ENOENT) {
++        mutex_unlock(&(table->mtx_access));
++        return -ENOENT;
++    }
++
++    if ((*sr_path_entry == NULL) || ((*sr_path_entry)->next == NULL)) {
++        mutex_unlock(&(table->mtx_access));
++        return 1;
++    }
++
++    *sr_path_entry = (*sr_path_entry)->next;
++    mutex_unlock(&(table->mtx_access));
++    return 0;
+ }
+ 
+ int fib_sr_search(fib_table_t *table, fib_sr_t *fib_sr, uint8_t *addr, size_t addr_size,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-fib_sr
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/div
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 126850	  36808	  86856	 250514	  3d292	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.........
+fib_sr_tests.test_fib_sr_09_create_sr_with_hops_and_get_one (tests/unittests/tests-fib_sr/tests-fib_sr.c 449) exp 0 was 1
+...
+run 12 failures 1
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffe41e88000; bottom 0x000000439000; size: 0x7ffe41a4f000 (140729999749120)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,125 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `gnrc_ipv6_nib_pl_set` does:
+
+1. **Validates** the `pfx` parameter is not NULL (matching the `assert` in `gnrc_ipv6_nib_pl_del`)
+2. **Acquires** the NIB mutex for exclusive access
+3. **Calls `_nib_pl_add`** which handles allocation (or finding an existing entry), setting the `_PL` mode flag, and computing absolute timestamps from the relative lifetimes (including edge-case guards to avoid `UINT32_MAX` overflow, and scheduling the prefix timeout event)
+4. **Returns `-ENOMEM`** if the allocation failed
+5. **Sends router advertisements** when `CONFIG_GNRC_IPV6_NIB_ROUTER` is active and the interface is configured to advertise — the mirror of `gnrc_ipv6_nib_pl_del` which uses `_snd_rtr_advs_drop_pfx` for removal, this uses `_snd_rtr_advs` with `false` (non-final) to advertise the new prefix
+6. **Releases** the mutex and returns `0` on success
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/network_layer/ipv6/nib/nib_pl.c
++++ sys/net/gnrc/network_layer/ipv6/nib/nib_pl.c
+@@ -30,7 +30,24 @@
+                          const ipv6_addr_t *pfx, unsigned pfx_len,
+                          uint32_t valid_ltime, uint32_t pref_ltime)
+ {
+-    /* MASKED - implement this function */
++    _nib_offl_entry_t *dst;
++
++    assert(pfx != NULL);
++    _nib_acquire();
++    dst = _nib_pl_add(iface, pfx, pfx_len, valid_ltime, pref_ltime);
++    if (dst == NULL) {
++        _nib_release();
++        return -ENOMEM;
++    }
++#if IS_ACTIVE(CONFIG_GNRC_IPV6_NIB_ROUTER)
++    gnrc_netif_t *netif = gnrc_netif_get_by_pid(iface);
++
++    if (netif && (netif->flags & GNRC_NETIF_FLAGS_IPV6_RTR_ADV)) {
++        _snd_rtr_advs(netif, &ipv6_addr_all_nodes_link_local, false);
++    }
++#endif
++    _nib_release();
++    return 0;
+ }
+ 
+ void gnrc_ipv6_nib_pl_del(unsigned iface,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-gnrc_ipv6_nib
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/event
+"make" -C /workspace/sys/evtimer
+"make" -C /workspace/sys/fmt
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/luid
+"make" -C /workspace/sys/net/crosslayer/inet_csum
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/net/link_layer/l2util
+"make" -C /workspace/sys/net/netif
+"make" -C /workspace/sys/net/network_layer/icmpv6
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/net/network_layer/ipv6/hdr
+"make" -C /workspace/sys/random
+"make" -C /workspace/sys/net/gnrc/netapi
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/net/gnrc/netif
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/net/gnrc/netreg
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/net/gnrc/network_layer/icmpv6
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6/hdr
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6/nib
+"make" -C /workspace/sys/net/gnrc/network_layer/ndp
+"make" -C /workspace/sys/net/gnrc/netif/hdr
+"make" -C /workspace/sys/net/gnrc/network_layer/sixlowpan/nd
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+   text	   data	    bss	    dec	    hex	filename
+ 312250	  72304	  92296	 476850	  746b2	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........................................................................................................................................
+tests.test_nib_pl_set__EINVAL_unspec_addr (tests/unittests/tests-gnrc_ipv6_nib/tests-gnrc_ipv6_nib-pl.c 50) exp -22 was 0
+.
+tests.test_nib_pl_set__EINVAL_link_local (tests/unittests/tests-gnrc_ipv6_nib/tests-gnrc_ipv6_nib-pl.c 63) exp -22 was 0
+.
+tests.test_nib_pl_set__EINVAL_mc_addr (tests/unittests/tests-gnrc_ipv6_nib/tests-gnrc_ipv6_nib-pl.c 77) exp -22 was 0
+.
+tests.test_nib_pl_set__EINVAL_pfx_len (tests/unittests/tests-gnrc_ipv6_nib/tests-gnrc_ipv6_nib-pl.c 91) exp -22 was 0
+.............
+run 152 failures 4
+
+native: exiting
+
+--- stderr ---
+==606==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffeddb92000; bottom 0x00000046f000; size: 0x7ffedd723000 (140732613668864)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

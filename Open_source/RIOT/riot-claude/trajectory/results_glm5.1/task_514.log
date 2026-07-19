@@ -1,0 +1,104 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete and correct. Here's what `ieee802154_get_iid` does per RFC 4944 section 6 and RFC 6282 section 3.2.2:
+
+- **`addr_len == 8` (long/EUI-64 address)**: Copies the 8-byte address directly into the IID, with the Universal/Local bit toggled (`XOR 0x02` on the first byte) — standard Modified EUI-64 formation.
+- **`addr_len == 4` (PAN ID + short address)**: Places the first 2 bytes (PAN ID) into IID bytes 0-1 with the U/L bit toggled, then falls through to the short address case which inserts `0xFFFE` at bytes 3-4 and the remaining 2 address bytes at bytes 6-7.
+- **`addr_len == 2` (short address)**: Sets bytes 2-5 to `00:ff:fe:00` and places the 2-byte short address at bytes 6-7, forming the IID `0000:00ff:fe00:XXXX`.
+- **Any other length**: Returns `NULL`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/ieee802154.h
++++ sys/include/net/ieee802154.h
+@@ -709,7 +709,38 @@
+ static inline eui64_t *ieee802154_get_iid(eui64_t *eui64, const uint8_t *addr,
+                                           size_t addr_len)
+ {
+-    /* MASKED - implement this function */
++    int i = 0;
++
++    eui64->uint8[0] = eui64->uint8[1] = 0;
++
++    switch (addr_len) {
++        case IEEE802154_LONG_ADDRESS_LEN:
++            eui64->uint8[0] = addr[i++] ^ 0x02;
++            eui64->uint8[1] = addr[i++];
++            eui64->uint8[2] = addr[i++];
++            eui64->uint8[3] = addr[i++];
++            eui64->uint8[4] = addr[i++];
++            eui64->uint8[5] = addr[i++];
++            eui64->uint8[6] = addr[i++];
++            eui64->uint8[7] = addr[i++];
++            break;
++        case 4:
++            eui64->uint8[0] = addr[i++] ^ 0x02;
++            eui64->uint8[1] = addr[i++];
++            /* Falls through. */
++        case IEEE802154_SHORT_ADDRESS_LEN:
++            eui64->uint8[2] = 0;
++            eui64->uint8[3] = 0xff;
++            eui64->uint8[4] = 0xfe;
++            eui64->uint8[5] = 0;
++            eui64->uint8[6] = addr[i++];
++            eui64->uint8[7] = addr[i++];
++            break;
++        default:
++            return NULL;
++    }
++
++    return eui64;
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ieee802154
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/link_layer/ieee802154
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+ 154117	  36616	  78152	 268885	  41a55	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....................................................................
+OK (69 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff05962000; bottom 0x000000441000; size: 0x7fff05521000 (140733282652160)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

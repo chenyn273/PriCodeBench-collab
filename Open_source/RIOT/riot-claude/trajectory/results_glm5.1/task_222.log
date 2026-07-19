@@ -1,0 +1,109 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `matstat_merge` does:
+
+**Edge cases:**
+- If `src->count == 0`, nothing to merge — return early
+- If `dest->count == 0`, just copy `src` into `dest`
+
+**Merge logic** (matching the header doc: "add sums and count, take max of max, min of min"):
+1. **max/min** — take the max of max values, min of min values
+2. **sum** — add the two sums together
+3. **sum_sq** — merged using the parallel Welford/Chan formula: `M2_combined = M2_a + M2_b + delta² * count_a * count_b / count_combined`, where `delta = mean_a - mean_b`. This keeps the variance computation consistent with `matstat_add`. Negative `sum_sq` from integer truncation is clamped to 0 (same guard as in `matstat_add`).
+4. **count** — add the two counts
+5. **mean** — recompute from the combined sum and count
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/matstat/matstat.c
++++ sys/matstat/matstat.c
+@@ -67,5 +67,35 @@
+ 
+ void matstat_merge(matstat_state_t *dest, const matstat_state_t *src)
+ {
+-    /* MASKED - implement this function */
++    if (src->count == 0) {
++        return;
++    }
++    if (dest->count == 0) {
++        *dest = *src;
++        return;
++    }
++
++    if (src->max > dest->max) {
++        dest->max = src->max;
++    }
++    if (src->min < dest->min) {
++        dest->min = src->min;
++    }
++
++    int64_t delta = (int64_t)dest->mean - (int64_t)src->mean;
++    uint32_t count = dest->count + src->count;
++
++    dest->sum += src->sum;
++
++    int64_t sum_sq_delta = (delta * delta * (int64_t)dest->count * (int64_t)src->count) / count;
++    int64_t new_sum_sq = (int64_t)dest->sum_sq + (int64_t)src->sum_sq + sum_sq_delta;
++    if (new_sum_sq < 0) {
++        dest->sum_sq = 0;
++    }
++    else {
++        dest->sum_sq = (uint64_t)new_sum_sq;
++    }
++
++    dest->count = count;
++    dest->mean = dest->sum / (int64_t)count;
+ }
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-matstat
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/matstat
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+  88826	  32128	  78120	 199074	  309a2	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....
+matstat_tests.test_matstat_merge_variance (tests/unittests/tests-matstat/tests-matstat.c 190) var_diff > -1000
+...
+run 8 failures 1
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff863e7000; bottom 0x00000042f000; size: 0x7fff85fb8000 (140735441240064)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

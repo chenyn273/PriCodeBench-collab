@@ -1,0 +1,115 @@
+============================================================
+=== Claude Session ===
+============================================================
+The `fib_sr_read_head` function has been implemented. Here's what it does:
+
+1. **Locks the mutex** and validates that `fib_sr` is not NULL and belongs to the table (returns `-EFAULT` otherwise)
+2. **Checks lifetime** via `fib_sr_check_lifetime` — returns `-ENOENT` if the source route has expired
+3. **Reads the head fields** into the caller-provided pointers (all nullable):
+   - `iface_id` — the source route's interface ID
+   - `sr_flags` — the source route's flags
+   - `sr_lifetime` — the **remaining** lifetime in ms, converted back from the absolute internal time-point (or `FIB_LIFETIME_NO_EXPIRE` if the route never expires)
+4. **Unlocks the mutex** and returns 0 on success
+
+This mirrors the `fib_sr_set` function (which writes these same fields) and follows the same patterns used by `fib_sr_read_destination` and other SR functions in the file.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -772,7 +772,37 @@
+ int fib_sr_read_head(fib_table_t *table, fib_sr_t *fib_sr, kernel_pid_t *iface_id,
+                      uint32_t *sr_flags, uint32_t *sr_lifetime)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&(table->mtx_access));
++    if ((fib_sr == NULL) || (fib_is_sr_in_table(table, fib_sr) == -ENOENT)) {
++        mutex_unlock(&(table->mtx_access));
++        return -EFAULT;
++    }
++
++    if (fib_sr_check_lifetime(fib_sr) == -ENOENT) {
++        mutex_unlock(&(table->mtx_access));
++        return -ENOENT;
++    }
++
++    if (iface_id != NULL) {
++        *iface_id = fib_sr->sr_iface_id;
++    }
++
++    if (sr_flags != NULL) {
++        *sr_flags = fib_sr->sr_flags;
++    }
++
++    if (sr_lifetime != NULL) {
++        if (fib_sr->sr_lifetime == FIB_LIFETIME_NO_EXPIRE) {
++            *sr_lifetime = (uint32_t)FIB_LIFETIME_NO_EXPIRE;
++        }
++        else {
++            uint64_t tm = fib_sr->sr_lifetime - xtimer_now_usec64();
++            *sr_lifetime = (uint32_t)(tm / US_PER_MS);
++        }
++    }
++
++    mutex_unlock(&(table->mtx_access));
++    return 0;
+ }
+ 
+ int fib_sr_read_destination(fib_table_t *table, fib_sr_t *fib_sr,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-fib_sr
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/div
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 127059	  36808	  86856	 250723	  3d363	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+...
+fib_sr_tests.test_fib_sr_03_read_sr_parameters (tests/unittests/tests-fib_sr/tests-fib_sr.c 167) exp -14 was 0
+.........
+run 12 failures 1
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffeb961d000; bottom 0x000000439000; size: 0x7ffeb91e4000 (140732004188160)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

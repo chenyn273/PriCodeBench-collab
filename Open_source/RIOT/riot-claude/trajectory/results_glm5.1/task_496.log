@@ -1,0 +1,74 @@
+============================================================
+=== Claude Session ===
+============================================================
+Done. The `gnrc_netif_pktq_empty` function now asserts `netif != NULL` (consistent with other functions in this header) and returns whether the linked-list head pointer `netif->send_queue.queue` is `NULL` — which indicates an empty queue.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/gnrc/netif/pktq.h
++++ sys/include/net/gnrc/netif/pktq.h
+@@ -127,7 +127,8 @@
+  */
+ static inline bool gnrc_netif_pktq_empty(gnrc_netif_t *netif)
+ {
+-    /* MASKED - implement this function */
++    assert(netif != NULL);
++    return netif->send_queue.queue == NULL;
+ }
+ 
+ #ifdef __cplusplus
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-gnrc_netif_pktq
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/div
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/net/gnrc/netif
+"make" -C /workspace/sys/net/gnrc/netif/pktq
+   text	   data	    bss	    dec	    hex	filename
+  90294	  34080	  79080	 203454	  31abe	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.........
+OK (9 tests)
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd6cd36000; bottom 0x000000430000; size: 0x7ffd6c906000 (140726424854528)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,106 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implemented `fib_get_next_hop` with the following logic:
+
+1. **Parameter validation**: Returns `-EFAULT` if `dst` or `next_hop` is NULL, `-EINVAL` if `iface_id`, `next_hop_size`, or `next_hop_flags` is NULL
+2. **Table lookup**: Acquires the mutex, then calls `fib_find_entry` to find a matching route
+3. **No route found**: If `count == 0`, signals registered routing protocols about the unreachable destination, releases the mutex, and returns `-EHOSTUNREACH`
+4. **Copy next hop**: Uses `universal_address_get_address` to copy the next hop address into the caller's buffer; returns `-ENOBUFS` if the buffer is too small
+5. **Set output params**: Populates `iface_id` and `next_hop_flags` from the found entry
+6. **Cleanup**: Releases the mutex and returns 0 on success
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -494,7 +494,39 @@
+                      uint32_t *next_hop_flags, uint8_t *dst, size_t dst_size,
+                      uint32_t dst_flags)
+ {
+-    /* MASKED - implement this function */
++    if ((dst == NULL) || (next_hop == NULL)) {
++        return -EFAULT;
++    }
++
++    if ((iface_id == NULL) || (next_hop_size == NULL) || (next_hop_flags == NULL)) {
++        return -EINVAL;
++    }
++
++    mutex_lock(&(table->mtx_access));
++    size_t count = 1;
++    fib_entry_t *entry[count];
++
++    int ret = fib_find_entry(table, dst, dst_size, &(entry[0]), &count);
++
++    if (count == 0) {
++        /* no matching entry found, notify RPs */
++        fib_signal_rp(table, FIB_MSG_RP_SIGNAL_UNREACHABLE_DESTINATION,
++                      dst, dst_size, dst_flags);
++        mutex_unlock(&(table->mtx_access));
++        return -EHOSTUNREACH;
++    }
++
++    if (universal_address_get_address(entry[0]->next_hop, next_hop,
++                                      next_hop_size) == NULL) {
++        mutex_unlock(&(table->mtx_access));
++        return -ENOBUFS;
++    }
++
++    *iface_id = entry[0]->iface_id;
++    *next_hop_flags = entry[0]->next_hop_flags;
++
++    mutex_unlock(&(table->mtx_access));
++    return 0;
+ }
+ 
+ int fib_get_destination_set(fib_table_t *table, uint8_t *prefix,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-fib
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/sys/div
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+
+--- stderr ---
+[01m[K/workspace/sys/net/network_layer/fib/fib.c:[m[K In function '[01m[Kfib_get_next_hop[m[K':
+[01m[K/workspace/sys/net/network_layer/fib/fib.c:509:9:[m[K [01;31m[Kerror: [m[Kunused variable '[01m[Kret[m[K' [[01;31m[K-Werror=unused-variable[m[K]
+  509 |     int [01;31m[Kret[m[K = fib_find_entry(table, dst, dst_size, &(entry[0]), &count);
+      |         [01;31m[K^~~[m[K
+cc1: all warnings being treated as errors
+make[3]: *** [/workspace/Makefile.base:157: /tmp/build/bin/native64/fib/fib.o] Error 1
+make[2]: *** [/workspace/Makefile.base:31: ALL--/workspace/sys/net/network_layer/fib] Error 2
+make[1]: *** [/workspace/Makefile.base:31: ALL--/workspace/sys] Error 2
+make: *** [/workspace/tests/unittests/../../Makefile.include:743: application_tests_unittests.module] Error 2
+
+
+

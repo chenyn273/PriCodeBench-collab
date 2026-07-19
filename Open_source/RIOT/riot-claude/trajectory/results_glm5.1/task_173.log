@@ -1,0 +1,92 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implemented `gnrc_pktbuf_start_write` at line 214. The logic mirrors the malloc-based reference implementation:
+
+- **`pkt == NULL`** → return `NULL`
+- **`pkt->users > 1`** (shared snip) → duplicate via `_create_snip`, decrement original's `users`, return the new copy
+- **`pkt->users == 1`** (exclusive) → return `pkt` unchanged (write-in-place is safe)
+
+All paths acquire/release the `gnrc_pktbuf_mutex`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/pktbuf_static/gnrc_pktbuf_static.c
++++ sys/net/gnrc/pktbuf_static/gnrc_pktbuf_static.c
+@@ -213,7 +213,22 @@
+ 
+ gnrc_pktsnip_t *gnrc_pktbuf_start_write(gnrc_pktsnip_t *pkt)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&gnrc_pktbuf_mutex);
++    if (pkt == NULL) {
++        mutex_unlock(&gnrc_pktbuf_mutex);
++        return NULL;
++    }
++    if (pkt->users > 1) {
++        gnrc_pktsnip_t *new;
++        new = _create_snip(pkt->next, pkt->data, pkt->size, pkt->type);
++        if (new != NULL) {
++            pkt->users--;
++        }
++        mutex_unlock(&gnrc_pktbuf_mutex);
++        return new;
++    }
++    mutex_unlock(&gnrc_pktbuf_mutex);
++    return pkt;
+ }
+ 
+ #ifdef DEVELHELP
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-pktbuf
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+   text	   data	    bss	    dec	    hex	filename
+ 119918	  38864	  84456	 243238	  3b626	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.............................................
+OK (45 tests)
+
+native: exiting
+
+--- stderr ---
+==347==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fffb2bbf000; bottom 0x000000439000; size: 0x7fffb2786000 (140736187621376)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

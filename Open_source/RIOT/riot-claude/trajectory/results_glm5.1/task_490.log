@@ -1,0 +1,74 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is:
+
+```c
+return (uint32_t)(((uint64_t)x * frac->frac) >> frac->shift);
+```
+
+**How it works:** `frac_init` precomputes a Q-format fixed-point representation of the fraction `num/den` — the `frac` field holds the fixed-point value and `shift` is the number of fractional bits. To scale, we cast `x` to 64-bit, multiply by `frac->frac` (avoiding 32-bit overflow), then right-shift by `frac->shift` to remove the fractional bits and convert back to an integer.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/frac.h
++++ sys/include/frac.h
+@@ -89,7 +89,7 @@
+  */
+ static inline uint32_t frac_scale(const frac_t *frac, uint32_t x)
+ {
+-    /* MASKED - implement this function */
++    return (uint32_t)(((uint64_t)x * frac->frac) >> frac->shift);
+ }
+ 
+ #ifdef __cplusplus
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-frac
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  76362	  31152	  78120	 185634	  2d522	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.
+OK (1 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffcea5c8000; bottom 0x00000042d000; size: 0x7ffcea19b000 (140724236038144)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

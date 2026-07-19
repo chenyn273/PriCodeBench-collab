@@ -1,0 +1,86 @@
+============================================================
+=== Claude Session ===
+============================================================
+Done. The implementation is:
+
+```c
+return ((((data_in_size + 2) / 3) * 4) + 1);
+```
+
+- `((data_in_size + 2) / 3)` — ceiling division to count 3-byte groups
+- `* 4` — each group produces 4 base64 characters
+- `+ 1` — space for the null terminator (consistent with how the decode estimate over-allocates)
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/base64.h
++++ sys/include/base64.h
+@@ -52,7 +52,7 @@
+  */
+ static inline size_t base64_estimate_encode_size(size_t data_in_size)
+ {
+-    /* MASKED - implement this function */
++    return ((((data_in_size + 2) / 3) * 4) + 1);
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-base64
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/base64
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+  90662	  32976	  78120	 201758	  3141e	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+...
+base64_tests.test_base64_03_single_character (tests/unittests/tests-base64/tests-base64.c 117) exp 0 was -2
+...
+base64_tests.test_base64_06_stream_encode (tests/unittests/tests-base64/tests-base64.c 232) exp 0 was -2
+..
+base64_tests.test_base64_08_encode_16_bytes (tests/unittests/tests-base64/tests-base64.c 320) exp 25 was 24
+.
+base64_tests.test_base64_09_encode_size_determination (tests/unittests/tests-base64/tests-base64.c 347) exp 29 was 28
+.....
+base64_tests.test_base64_13_size_estimation (tests/unittests/tests-base64/tests-base64.c 486) exp 0 was 1
+
+run 14 failures 5
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc27462000; bottom 0x000000430000; size: 0x7ffc27032000 (140720963002368)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,116 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `inet_csum_slice` does:
+
+1. **Odd alignment handling**: If `accum_len` is odd, the previous slice ended mid-word, so the first byte of this buffer is combined as the high byte of a 16-bit word (matching the dangling low byte from the previous slice).
+
+2. **16-bit word summation**: Sums all complete 16-bit words in network byte order (big-endian: high byte first).
+
+3. **Odd trailing byte**: If the current slice has an odd length, the last byte is shifted left by 8 to form the high byte of a partial word — this way, when the next call provides `accum_len` as odd, it correctly pairs with the low byte.
+
+4. **Carry folding**: Folds any carry bits back into the 16-bit sum (1's complement addition).
+
+5. **Returns unnormalized checksum**: Per the header docs, the 1's complement is not taken, allowing the result to be chained into further calculations. The `inet_csum()` wrapper calls this with `accum_len=0`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/crosslayer/inet_csum/inet_csum.c
++++ sys/net/crosslayer/inet_csum/inet_csum.c
+@@ -24,7 +24,29 @@
+ 
+ uint16_t inet_csum_slice(uint16_t sum, const uint8_t *buf, uint16_t len, size_t accum_len)
+ {
+-    /* MASKED - implement this function */
++    uint32_t csum = sum;
++
++    if (accum_len & 1) {
++        /* previous slice ended on an odd byte boundary, so this byte
++         * is the high byte of a 16-bit word */
++        csum += (uint16_t)((*buf) << 8);
++        buf++;
++        len--;
++    }
++
++    for (unsigned i = 0; i < (len & ~1U); i += 2) {
++        csum += (uint16_t)((buf[i] << 8) | buf[i + 1]);
++    }
++
++    if (len & 1) {
++        csum += (uint16_t)(buf[len - 1] << 8);
++    }
++
++    while (csum >> 16) {
++        csum = (csum & 0xffff) + (csum >> 16);
++    }
++
++    return (uint16_t)csum;
+ }
+ 
+ /** @} */
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-inet_csum
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/net/crosslayer/inet_csum
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  78849	  31536	  78120	 188505	  2e059	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.......
+inet_csum_tests.test_inet_csum__two_app_snips (tests/unittests/tests-inet_csum/tests-inet_csum.c 143) exp 56669 was 15869
+.
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc08ad5000; bottom 0x00000042d000; size: 0x7ffc086a8000 (140720449683456)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==329==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x000000409e9f bp 0x000000428cc0 sp 0x000000428cc0 T0)
+==329==The signal is caused by a READ memory access.
+==329==Hint: address points to the zero page.
+    #0 0x409e9f in inet_csum_slice /workspace/sys/net/crosslayer/inet_csum/inet_csum.c:32
+    #1 0x40ae1a in test_inet_csum__empty_app_buffer /workspace/tests/unittests/tests-inet_csum/tests-inet_csum.c:161
+    #2 0x408916 in TestCase_run /workspace/sys/embunit/TestCase.c:58
+    #3 0x408770 in TestCaller_run /workspace/sys/embunit/TestCaller.c:54
+    #4 0x408eca in TestRunner_runTest /workspace/sys/embunit/TestRunner.c:99
+    #5 0x40bbc5 in tests_inet_csum /workspace/tests/unittests/tests-inet_csum/tests-inet_csum.c:185
+    #6 0x402967 in main /workspace/tests/unittests/main.c:47
+    #7 0x40378d in main_trampoline /workspace/core/lib/init.c:60
+    #8 0x769bdf9def7f  (/lib/x86_64-linux-gnu/libc.so.6+0x5ef7f) (BuildId: 8e9fd827446c24067541ac5390e6f527fb5947bb)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /workspace/sys/net/crosslayer/inet_csum/inet_csum.c:32 in inet_csum_slice
+==329==ABORTING
+
+
+

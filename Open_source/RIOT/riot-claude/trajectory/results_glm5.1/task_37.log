@@ -1,0 +1,97 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation looks correct. Let me verify the logic against the documentation and call sites:
+
+1. **`COAP_CODE_EMPTY` case**: When `code == COAP_CODE_EMPTY`, builds a RST message with the same message ID. This matches the call sites at lines 570 and 589 where `coap_build_reply(pkt, COAP_CODE_EMPTY, ...)` is used to send a reset reply.
+
+2. **Normal reply case**: Uses `coap_build_reply_header` which:
+   - Determines response type (ACK for CON, NON for NON)
+   - Copies the token from the request
+   - Handles the No-Response option (returns `-ECANCELED` if suppressed)
+   - Returns the header length
+
+3. **Buffer size check**: If `header_len + payload_len > rlen`, returns `-ENOSPC` as documented.
+
+4. **Return value**: Returns `header_len + payload_len` (= `max_data_len` + header size), matching the documented return: "max_data_len + size of the header written in bytes".
+
+The implementation is complete and consistent with the API contract and all existing call sites.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/application_layer/nanocoap/nanocoap.c
++++ sys/net/application_layer/nanocoap/nanocoap.c
+@@ -737,7 +737,22 @@
+ ssize_t coap_build_reply(coap_pkt_t *pkt, unsigned code,
+                          uint8_t *rbuf, unsigned rlen, unsigned payload_len)
+ {
+-    /* MASKED - implement this function */
++    if (code == COAP_CODE_EMPTY) {
++        return coap_build_udp_hdr(rbuf, rlen, COAP_TYPE_RST, NULL, 0,
++                                  COAP_CODE_EMPTY, coap_get_id(pkt));
++    }
++
++    ssize_t header_len = coap_build_reply_header(pkt, code, rbuf, rlen,
++                                                 COAP_FORMAT_NONE, NULL, NULL);
++    if (header_len < 0) {
++        return header_len;
++    }
++
++    if ((unsigned)header_len + payload_len > rlen) {
++        return -ENOSPC;
++    }
++
++    return header_len + payload_len;
+ }
+ 
+ ssize_t coap_build_udp_hdr(void *buf, size_t buf_len, uint8_t type,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-nanocoap
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/application_layer/nanocoap
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+ 147205	  36040	  78120	 261365	  3fcf5	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....................................
+OK (37 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffffacd1000; bottom 0x00000043f000; size: 0x7ffffa892000 (140737396678656)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

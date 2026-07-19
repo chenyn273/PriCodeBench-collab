@@ -1,0 +1,112 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation follows the established patterns in the file:
+
+1. **NULL checks** on both `dirp` and `dirname` (consistent with `vfs_readdir`/`vfs_closedir` and `vfs_open`)
+2. **`_find_mount`** to resolve the path to a mount point and get the relative path (this increments `open_files` on success, same as `vfs_open`)
+3. **Initialize `dirp`** fields: `d_op`, `mp`, and `private_data.ptr = NULL` (matching what `_is_dir` does at lines 1186-1187, and the `opendir` callback documentation which states `private_data.ptr` is initialized to NULL)
+4. **Error handling for missing `d_op`**: returns `-EINVAL` and properly decrements `open_files` (matching error handling patterns in `vfs_open`/`vfs_close`)
+5. **Call the driver's `opendir`**: if it fails, clean up `dirp` with `memset` and decrement `open_files` (consistent with `vfs_closedir`'s cleanup approach)
+6. **Success path**: returns 0
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/vfs/vfs.c
++++ sys/vfs/vfs.c
+@@ -450,7 +450,41 @@
+ 
+ int vfs_opendir(vfs_DIR *dirp, const char *dirname)
+ {
+-    /* MASKED - implement this function */
++    DEBUG("vfs_opendir: %p, \"%s\"\n", (void *)dirp, dirname);
++    if ((dirp == NULL) || (dirname == NULL)) {
++        return -EINVAL;
++    }
++    const char *rel_path;
++    vfs_mount_t *mountp;
++    int res = _find_mount(&mountp, dirname, &rel_path);
++    /* _find_mount implicitly increments the open_files count on success */
++    if (res < 0) {
++        /* No mount point maps to the requested directory name */
++        DEBUG("vfs_opendir: no matching mount\n");
++        return res;
++    }
++    dirp->d_op = mountp->fs->d_op;
++    dirp->mp = mountp;
++    dirp->private_data.ptr = NULL;
++    if (dirp->d_op == NULL) {
++        DEBUG("vfs_opendir: no dir ops\n");
++        memset(dirp, 0, sizeof(*dirp));
++        uint16_t before = atomic_fetch_sub_u16(&mountp->open_files, 1);
++        assume(before > 0);
++        return -EINVAL;
++    }
++    if (dirp->d_op->opendir != NULL) {
++        res = dirp->d_op->opendir(dirp, rel_path);
++        if (res < 0) {
++            DEBUG("vfs_opendir: opendir: ERR %d!\n", res);
++            memset(dirp, 0, sizeof(*dirp));
++            uint16_t before = atomic_fetch_sub_u16(&mountp->open_files, 1);
++            assume(before > 0);
++            return res;
++        }
++    }
++    DEBUG("vfs_opendir: opened\n");
++    return 0;
+ }
+ 
+ int vfs_readdir(vfs_DIR *dirp, vfs_dirent_t *entry)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-vfs
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/cpu/native/vfs
+"make" -C /workspace/sys/fs/constfs
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/vfs
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+ 123359	  45128	  79328	 247815	  3c807	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........................................
+OK (40 tests)
+
+native: exiting
+
+--- stderr ---
+/usr/bin/ld: warning: /tmp/build/bin/native64/tests_unittests.elf has a LOAD segment with RWX permissions
+==367==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffe26112000; bottom 0x00000043b000; size: 0x7ffe25cd7000 (140729532641280)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

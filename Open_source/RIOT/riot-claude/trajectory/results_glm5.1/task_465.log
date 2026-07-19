@@ -1,0 +1,68 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. `coap_get_token` now delegates to the existing `coap_hdr_get_token` function, which returns a pointer to the token position within the CoAP header by advancing past the header struct and any extended TKL bytes. This follows the same pattern used by `coap_get_token_len` on line 610 (casting `pkt->buf` to `coap_udp_hdr_t*`).
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/nanocoap.h
++++ sys/include/net/nanocoap.h
+@@ -619,7 +619,7 @@
+  */
+ static inline void *coap_get_token(const coap_pkt_t *pkt)
+ {
+-    /* MASKED - implement this function */
++    return (void *)coap_hdr_get_token((const coap_udp_hdr_t *)pkt->buf);
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/tests/unittests/tests-nanocoap
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/application_layer/nanocoap
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 147893	  36040	  78120	 262053	  3ffa5	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....................................
+OK (37 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd18293000; bottom 0x00000043f000; size: 0x7ffd17e54000 (140725004353536)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,78 @@
+============================================================
+=== Claude Session ===
+============================================================
+Done. `gnrc_pktqueue_remove_head` now:
+
+1. Saves the current head (`*queue`)
+2. If the queue is non-empty, advances `*queue` to the next node and detaches the old head by setting its `next` to `NULL`
+3. Returns the removed head (or `NULL` if the queue was empty)
+
+This follows the same pattern as `gnrc_pktqueue_remove` — using the `utlist`-style singly-linked list where `*queue` is the head pointer and `next` chains the nodes.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/gnrc/pktqueue.h
++++ sys/include/net/gnrc/pktqueue.h
+@@ -76,7 +76,12 @@
+  */
+ static inline gnrc_pktqueue_t *gnrc_pktqueue_remove_head(gnrc_pktqueue_t **queue)
+ {
+-    /* MASKED - implement this function */
++    gnrc_pktqueue_t *head = *queue;
++    if (head) {
++        *queue = head->next;
++        head->next = NULL;
++    }
++    return head;
+ }
+ 
+ #ifdef __cplusplus
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-pktqueue
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  84556	  32232	  78208	 194996	  2f9b4	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....
+OK (5 tests)
+
+native: exiting
+
+--- stderr ---
+==322==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd13ad2000; bottom 0x00000042e000; size: 0x7ffd136a4000 (140724929183744)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+
