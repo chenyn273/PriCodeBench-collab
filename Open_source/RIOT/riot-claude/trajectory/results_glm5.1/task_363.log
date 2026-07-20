@@ -1,0 +1,126 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation follows the established patterns in the file (particularly `vfs_opendir` for mount lookup and `vfs_bind` for fd initialization):
+
+1. **Validate input** — return `-EINVAL` if `name` is NULL
+2. **Find the mount** — call `_find_mount` to locate the filesystem, which also increments `open_files`
+3. **Normalize empty relative path** — replace empty string with `"/"` (same as `vfs_opendir`)
+4. **Check for file ops** — return `-EINVAL` if `f_op` is NULL, decrementing `open_files`
+5. **Allocate an fd** — use `_init_fd(VFS_ANY_FD, ...)` under `_open_mutex` (same as `vfs_bind`)
+6. **Call driver open** — if the driver implements `open`, call it; on failure, free the fd (which also decrements `open_files`)
+7. **Return the fd** on success
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/vfs/vfs.c
++++ sys/vfs/vfs.c
+@@ -279,7 +279,54 @@
+ 
+ int vfs_open(const char *name, int flags, mode_t mode)
+ {
+-    /* MASKED - implement this function */
++    DEBUG("vfs_open: \"%s\", %d, 0%03lo\n", name, flags, (long unsigned int)mode);
++    if (name == NULL) {
++        return -EINVAL;
++    }
++    const char *rel_path;
++    vfs_mount_t *mountp;
++    int res = _find_mount(&mountp, name, &rel_path);
++    /* _find_mount implicitly increments the open_files count on success */
++    if (res < 0) {
++        /* No mount point maps to the requested file name */
++        DEBUG("vfs_open: no matching mount\n");
++        return res;
++    }
++    if (rel_path[0] == '\0') {
++        /* if the trailing slash is missing we will get an empty string back, to
++         * be consistent against the file system drivers we give the relative
++         * path "/" instead */
++        rel_path = "/";
++    }
++    if (mountp->fs->f_op == NULL) {
++        /* file system driver does not support file operations */
++        /* remember to decrement the open_files count */
++        uint16_t before = atomic_fetch_sub_u16(&mountp->open_files, 1);
++        assume(before > 0);
++        return -EINVAL;
++    }
++    mutex_lock(&_open_mutex);
++    int fd = _init_fd(VFS_ANY_FD, mountp->fs->f_op, mountp, flags, NULL);
++    mutex_unlock(&_open_mutex);
++    if (fd < 0) {
++        DEBUG("vfs_open: _init_fd: ERR %d!\n", fd);
++        /* remember to decrement the open_files count */
++        uint16_t before = atomic_fetch_sub_u16(&mountp->open_files, 1);
++        assume(before > 0);
++        return fd;
++    }
++    vfs_file_t *filp = &_vfs_open_files[fd];
++    if (filp->f_op->open != NULL) {
++        res = filp->f_op->open(filp, rel_path, flags, mode);
++        if (res < 0) {
++            DEBUG("vfs_open: open ERR %d!\n", res);
++            /* _free_fd also decrements the open_files count */
++            _free_fd(fd);
++            return res;
++        }
++    }
++    DEBUG("vfs_open: opened %d\n", fd);
++    return fd;
+ }
+ 
+ static inline int _prep_read(int fd, const void *dest, vfs_file_t **filp)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-vfs
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/fs/constfs
+"make" -C /workspace/sys/libc
+"make" -C /workspace/cpu/native/vfs
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/vfs
+   text	   data	    bss	    dec	    hex	filename
+ 123625	  45128	  79328	 248081	  3c911	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........................................
+OK (40 tests)
+
+native: exiting
+
+--- stderr ---
+/usr/bin/ld: warning: /tmp/build/bin/native64/tests_unittests.elf has a LOAD segment with RWX permissions
+==367==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc1edbd000; bottom 0x00000043b000; size: 0x7ffc1e982000 (140720821772288)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

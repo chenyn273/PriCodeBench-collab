@@ -1,0 +1,137 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `coap_build_udp_hdr` does:
+
+1. **Calculates total header length** = `sizeof(coap_udp_hdr_t)` (4 bytes) + extended TKL bytes (0/1/2 for RFC 8974) + token length
+2. **Returns `-ENOBUFS`** if the buffer is too small
+3. **Writes the fixed 4-byte header**: `ver_t_tkl` (version=1, type, TKL), `code`, `id` (network byte order)
+4. **Writes extended TKL bytes** if `MODULE_NANOCOAP_TOKEN_EXT` is enabled and token_len >= 13 (per RFC 8974: TKL=13 means 1-byte extension storing `token_len - 13`, TKL=14 means 2-byte extension storing `token_len - 269`)
+5. **Copies the token** bytes after the header
+6. **Returns total header length**
+
+This is consistent with how `coap_hdr_get_token_len` reads the values back, and matches the callers (`coap_build_reply`, `coap_build_reply_header`, `coap_build_empty_ack`, and `coap_build_hdr`).
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/application_layer/nanocoap/nanocoap.c
++++ sys/net/application_layer/nanocoap/nanocoap.c
+@@ -783,7 +783,67 @@
+                            const void *token, size_t token_len,
+                            uint8_t code, uint16_t id)
+ {
+-    /* MASKED - implement this function */
++    uint8_t *pkt_pos = buf;
++    size_t hdr_len = sizeof(coap_udp_hdr_t);
++
++    if (IS_USED(MODULE_NANOCOAP_TOKEN_EXT)) {
++        if (token_len < 13) {
++            /* nothing extra */
++        }
++        else if (token_len < 269) {
++            hdr_len += 1;
++        }
++        else {
++            hdr_len += 2;
++        }
++    }
++    else {
++        assert(token_len <= COAP_TOKEN_LENGTH_MAX);
++    }
++
++    hdr_len += token_len;
++
++    if (hdr_len > buf_len) {
++        return -ENOBUFS;
++    }
++
++    coap_udp_hdr_t *hdr = buf;
++
++    /* build ver_t_tkl byte */
++    uint8_t tkl;
++    if (IS_USED(MODULE_NANOCOAP_TOKEN_EXT) && (token_len >= 13)) {
++        if (token_len < 269) {
++            tkl = 13;
++        }
++        else {
++            tkl = 14;
++        }
++    }
++    else {
++        tkl = (uint8_t)token_len;
++    }
++
++    hdr->ver_t_tkl = (COAP_V1 << 6) | (type << 4) | tkl;
++    hdr->code = code;
++    hdr->id = htons(id);
++
++    pkt_pos += sizeof(coap_udp_hdr_t);
++
++    if (IS_USED(MODULE_NANOCOAP_TOKEN_EXT)) {
++        if (token_len >= 13 && token_len < 269) {
++            *pkt_pos++ = (uint8_t)(token_len - 13);
++        }
++        else if (token_len >= 269) {
++            byteorder_htobebufs(pkt_pos, (uint16_t)(token_len - 269));
++            pkt_pos += 2;
++        }
++    }
++
++    if (token_len) {
++        memcpy(pkt_pos, token, token_len);
++    }
++
++    return hdr_len;
+ }
+ 
+ void coap_pkt_init(coap_pkt_t *pkt, uint8_t *buf, size_t len, size_t header_len)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-nanocoap
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/net/application_layer/nanocoap
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 147443	  36040	  78120	 261603	  3fde3	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....................................
+OK (37 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffecbf5b000; bottom 0x00000043f000; size: 0x7ffecbb1c000 (140732315844608)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

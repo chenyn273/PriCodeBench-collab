@@ -1,0 +1,133 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is done. Here's what `credman_add` does, following the documented contract and existing code patterns:
+
+1. **Asserts** `credential` is not NULL (same pattern as `credman_get`)
+2. **Validates** tag/type are not empty — returns `CREDMAN_INVALID`
+3. **Validates** params based on type:
+   - PSK: requires non-NULL `key.s`, non-zero `key.len`, non-NULL `id.s`, non-zero `id.len`
+   - ECDSA: requires non-NULL `private_key`
+   - Unknown types: returns `CREDMAN_TYPE_UNKNOWN`
+4. **Locks** the mutex, then calls `_find_credential_pos` with the `empty` out-parameter to find both duplicates and available slots in one pass
+5. Returns `CREDMAN_EXIST` if duplicate found, `CREDMAN_NO_SPACE` if pool is full
+6. Otherwise copies the credential into the empty slot, increments `used`, unlocks, and returns `CREDMAN_OK`
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/credman/credman.c
++++ sys/net/credman/credman.c
+@@ -52,7 +52,56 @@
+ 
+ int credman_add(const credman_credential_t *credential)
+ {
+-    /* MASKED - implement this function */
++    assert(credential);
++
++    if ((credential->tag == CREDMAN_TAG_EMPTY) ||
++        (credential->type == CREDMAN_TYPE_EMPTY)) {
++        DEBUG("credman: invalid credential tag or type\n");
++        return CREDMAN_INVALID;
++    }
++
++    switch (credential->type) {
++        case CREDMAN_TYPE_PSK:
++            if ((credential->params.psk.key.s == NULL) ||
++                (credential->params.psk.key.len == 0) ||
++                (credential->params.psk.id.s == NULL) ||
++                (credential->params.psk.id.len == 0)) {
++                DEBUG("credman: invalid PSK credential parameters\n");
++                return CREDMAN_INVALID;
++            }
++            break;
++        case CREDMAN_TYPE_ECDSA:
++            if (credential->params.ecdsa.private_key == NULL) {
++                DEBUG("credman: invalid ECDSA credential parameters\n");
++                return CREDMAN_INVALID;
++            }
++            break;
++        default:
++            DEBUG("credman: unknown credential type\n");
++            return CREDMAN_TYPE_UNKNOWN;
++    }
++
++    mutex_lock(&_mutex);
++    credman_credential_t *empty = NULL;
++    int pos = _find_credential_pos(credential->tag, credential->type, &empty);
++
++    if (pos >= 0) {
++        DEBUG("credman: credential with tag %d and type %d already exists\n",
++              credential->tag, credential->type);
++        mutex_unlock(&_mutex);
++        return CREDMAN_EXIST;
++    }
++
++    if (empty == NULL) {
++        DEBUG("credman: no space in credential pool\n");
++        mutex_unlock(&_mutex);
++        return CREDMAN_NO_SPACE;
++    }
++
++    memcpy(empty, credential, sizeof(credman_credential_t));
++    used++;
++    mutex_unlock(&_mutex);
++    return CREDMAN_OK;
+ }
+ 
+ #if IS_USED(MODULE_CREDMAN_LOAD)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+rm -Rf /tmp/build/pkg/tiny-asn1
+mkdir -p $(dirname /tmp/build/pkg/tiny-asn1)
+cp -a /workspace/build/pkg/tiny-asn1/ /tmp/build/pkg/tiny-asn1
+touch /tmp/build/pkg/tiny-asn1/.prepared
+"make" -C /workspace/pkg/tiny-asn1/ 
+"make" -C /tmp/build/pkg/tiny-asn1/src -f /workspace/Makefile.base MODULE=tiny-asn1
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-credman
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/credman
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  94505	  32840	  78440	 205785	  323d9	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........
+OK (8 tests)
+
+native: exiting
+
+--- stderr ---
+==380==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffdc4147000; bottom 0x000000431000; size: 0x7ffdc3d16000 (140727888732160)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

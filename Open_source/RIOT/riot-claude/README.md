@@ -6,7 +6,7 @@ RIOT-Claude 是一个 SWE-bench 风格的自动化基准测试框架，用于在
 
 框架将目标函数体挖空（mask），让 Claude Code CLI 在 Docker 沙箱中直接编辑源文件补全实现，然后通过文件完整性检查、AST 归一化校验和编译+单元测试验证结果的正确性。
 
-**数据集规模**: 539 个 task（305 个 `.c` + 234 个 `.h`，均通过 tree-sitter AST 验证确认有测试断言）
+**数据集规模**: 538 个 task（304 个 `.c` + 234 个 `.h`，均通过 tree-sitter AST 验证确认有测试断言）
 
 ***
 
@@ -385,7 +385,7 @@ wsl bash -c "cd /home/carl/RIOT/riot-claude && python3 runner.py --batch 58 --st
 wsl bash -c "cd /home/carl/RIOT/riot-claude && python3 runner.py --batch 20 --resume"
 
 # 全量
-wsl bash -c "cd /home/carl/RIOT/riot-claude && python3 runner.py --batch 539"
+wsl bash -c "cd /home/carl/RIOT/riot-claude && python3 runner.py --batch 538"
 ```
 
 ***

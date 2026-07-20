@@ -1,0 +1,140 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's a summary of the key design decisions:
+
+**Input validation** — Returns NULL if `size == 0`, `pkt == NULL`, `size > pkt->size`, or `pkt->data == NULL`, matching the documented contract.
+
+**Full-mark case** (`pkt->size == size`) — The new snip takes ownership of `pkt`'s data, and `pkt` gets `data=NULL, size=0`. This matches the documented special case and the malloc reference.
+
+**Partial-mark case** — Since the static buffer can't `realloc`, the approach is:
+1. Copy the trailing payload bytes to a freshly allocated region in the static buffer
+2. Free the unused portion of the original data region (the gap between the aligned mark size and the original aligned size)
+3. The marked snip keeps the original `pkt->data` pointer (first `size` bytes), while `pkt` now points to the new payload buffer
+
+This preserves the documented invariant that the marked snip ("result") comes *after* `pkt` in the linked list, with `pkt->next == result` and `result->next` pointing to the old `pkt->next`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/pktbuf_static/gnrc_pktbuf_static.c
++++ sys/net/gnrc/pktbuf_static/gnrc_pktbuf_static.c
+@@ -98,7 +98,65 @@
+ 
+ gnrc_pktsnip_t *gnrc_pktbuf_mark(gnrc_pktsnip_t *pkt, size_t size, gnrc_nettype_t type)
+ {
+-    /* MASKED - implement this function */
++    gnrc_pktsnip_t *header;
++    void *payload;
++
++    mutex_lock(&gnrc_pktbuf_mutex);
++
++    if ((size == 0) || (pkt == NULL) || (size > pkt->size) || (pkt->data == NULL)) {
++        DEBUG("pktbuf: size == 0 (was %" PRIuSIZE ") or pkt == NULL (was %p) or "
++              "size > pkt->size (was %" PRIuSIZE ") or pkt->data == NULL (was %p)\n",
++              size, (void *)pkt, (pkt ? pkt->size : 0),
++              (pkt ? pkt->data : NULL));
++        mutex_unlock(&gnrc_pktbuf_mutex);
++        return NULL;
++    }
++
++    /* create new snip descriptor for marked data */
++    header = _pktbuf_alloc(sizeof(gnrc_pktsnip_t));
++    if (header == NULL) {
++        DEBUG("pktbuf: could not allocate new snip\n");
++        mutex_unlock(&gnrc_pktbuf_mutex);
++        return NULL;
++    }
++
++    if (pkt->size == size) {
++        /* mark consumes entire packet data */
++        _set_pktsnip(header, pkt->next, pkt->data, size, type);
++        _set_pktsnip(pkt, header, NULL, 0, pkt->type);
++        mutex_unlock(&gnrc_pktbuf_mutex);
++        return header;
++    }
++
++    /* allocate new buffer for the remaining payload data */
++    payload = _pktbuf_alloc(pkt->size - size);
++    if (payload == NULL) {
++        DEBUG("pktbuf: could not allocate payload for marked section.\n");
++        gnrc_pktbuf_free_internal(header, sizeof(gnrc_pktsnip_t));
++        mutex_unlock(&gnrc_pktbuf_mutex);
++        return NULL;
++    }
++
++    /* copy remaining payload data to new buffer */
++    memcpy(payload, ((uint8_t *)pkt->data) + size, pkt->size - size);
++
++    /* shrink the original data region to just the marked portion */
++    size_t aligned_size = _align(size);
++    if (_align(pkt->size) > aligned_size) {
++        gnrc_pktbuf_free_internal(((uint8_t *)pkt->data) + aligned_size,
++                                  pkt->size - aligned_size);
++    }
++
++    /* set up the marked snip with the original data */
++    _set_pktsnip(header, pkt->next, pkt->data, size, type);
++
++    /* update pkt to point to the new payload buffer */
++    pkt->data = payload;
++    pkt->size -= size;
++    pkt->next = header;
++
++    mutex_unlock(&gnrc_pktbuf_mutex);
++    return header;
+ }
+ 
+ int gnrc_pktbuf_realloc_data(gnrc_pktsnip_t *pkt, size_t size)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-pktbuf
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+   text	   data	    bss	    dec	    hex	filename
+ 120092	  38864	  84456	 243412	  3b6d4	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.............................................
+OK (45 tests)
+
+native: exiting
+
+--- stderr ---
+==347==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff762eb000; bottom 0x000000439000; size: 0x7fff75eb2000 (140735171731456)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,90 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's the reasoning:
+
+1. **Discard any unfinished chunk**: If `cur_start` is non-NULL, a chunk was started but not ended. Following the same logic as `crb_end_chunk`'s discard path — if `protect` points to the discarded chunk's start, set `protect` to NULL (no valid data to protect), then reset `cur` back to `cur_start` to reclaim the space.
+
+2. **Check if full**: When `protect == cur`, the write cursor has caught up to the protect marker, meaning the buffer is full (no space to write). If `protect` is NULL (no valid chunks exist), this condition is false and we can write anywhere.
+
+3. **Start the new chunk**: Set `cur_start = cur` to mark where the new chunk begins.
+
+This matches the documented behavior ("If an unfinished chunk already exists, it will be discarded"), the discard pattern from `crb_end_chunk`, and the full-detection pattern from `crb_add_byte`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/chunked_ringbuffer.h
++++ sys/include/chunked_ringbuffer.h
+@@ -101,7 +101,21 @@
+  */
+ static inline bool crb_start_chunk(chunk_ringbuf_t *rb)
+ {
+-    /* MASKED - implement this function */
++    /* discard any unfinished chunk */
++    if (rb->cur_start) {
++        if (rb->protect == rb->cur_start) {
++            rb->protect = NULL;
++        }
++        rb->cur = rb->cur_start;
++    }
++
++    /* ringbuffer is full */
++    if (rb->protect == rb->cur) {
++        return false;
++    }
++
++    rb->cur_start = rb->cur;
++    return true;
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-chunked_ringbuffer
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/chunked_ringbuffer
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  83882	  32600	  78120	 194602	  2f82a	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..
+OK (2 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffda9171000; bottom 0x00000042e000; size: 0x7ffda8d43000 (140727435931648)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,68 @@
+============================================================
+=== Claude Session ===
+============================================================
+The function is implemented. It sets the first 64 bits (`u64[0]`) of the address to the link-local prefix `fe80::/64` using `byteorder_htonll` with the value `0xfe80000000000000ull`, which is consistent with the pattern used by similar functions in this file (e.g., `ipv6_addr_set_solicited_nodes` at line 623). The lower 64 bits (interface ID) are left untouched, as documented.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/ipv6/addr.h
++++ sys/include/net/ipv6/addr.h
+@@ -532,7 +532,7 @@
+  */
+ static inline void ipv6_addr_set_link_local_prefix(ipv6_addr_t *addr)
+ {
+-    /* MASKED - implement this function */
++    addr->u64[0] = byteorder_htonll(0xfe80000000000000ull);
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ipv6_addr
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 193720	  41928	  78152	 313800	  4c9c8	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+............................................................................................
+OK (92 tests)
+
+native: exiting
+
+--- stderr ---
+==335==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffffc303000; bottom 0x00000044c000; size: 0x7ffffbeb7000 (140737419898880)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

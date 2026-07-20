@@ -1,0 +1,73 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implemented `matstat_clear` by resetting all fields to match the `MATSTAT_STATE_INIT` initializer from the header: `sum`, `sum_sq`, `count`, and `mean` to 0; `min` to `INT32_MAX`; `max` to `INT32_MIN`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/matstat/matstat.c
++++ sys/matstat/matstat.c
+@@ -14,7 +14,12 @@
+ 
+ void matstat_clear(matstat_state_t *state)
+ {
+-    /* MASKED - implement this function */
++    state->sum = 0;
++    state->sum_sq = 0;
++    state->count = 0;
++    state->mean = 0;
++    state->min = INT32_MAX;
++    state->max = INT32_MIN;
+ }
+ 
+ void matstat_add(matstat_state_t *state, int32_t value)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/tests/unittests/tests-matstat
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/matstat
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  88844	  32128	  78120	 199092	  309b4	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........
+OK (8 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffe6f26f000; bottom 0x00000042f000; size: 0x7ffe6ee40000 (140730758856704)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

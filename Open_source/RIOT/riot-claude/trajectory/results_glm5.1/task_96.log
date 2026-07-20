@@ -1,0 +1,103 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation follows the established patterns in the codebase:
+
+1. **Lock the mutex** for thread-safe table access
+2. **Validate pointers** — return `-EFAULT` if `dst` or `next_hop` is NULL (per the header docs)
+3. **Search for an existing entry** using `fib_find_entry`:
+   - If an exact match is found (returns 1), **update** the existing entry via `fib_upd_entry` (preserving the destination but updating the next hop, flags, and lifetime)
+   - Otherwise, **create** a new entry via `fib_create_entry`
+4. **Unlock the mutex** and return the result
+
+This mirrors the structure of `fib_update_entry` (lines 399-429), but crucially: `fib_update_entry` only updates existing entries and silently ignores when no match is found, while `fib_add_entry` falls through to `fib_create_entry` to create a new one when the destination doesn't exist yet.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -393,7 +393,28 @@
+                   uint32_t dst_flags, uint8_t *next_hop, size_t next_hop_size,
+                   uint32_t next_hop_flags, uint32_t lifetime)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&(table->mtx_access));
++    DEBUG("[fib_add_entry]\n");
++    size_t count = 1;
++    fib_entry_t *entry[count];
++    int ret = -ENOMEM;
++
++    if ((dst == NULL) || (next_hop == NULL)) {
++        mutex_unlock(&(table->mtx_access));
++        return -EFAULT;
++    }
++
++    if (fib_find_entry(table, dst, dst_size, &(entry[0]), &count) == 1) {
++        DEBUG("[fib_add_entry] found entry: %p\n", (void *)(entry[0]));
++        ret = fib_upd_entry(entry[0], next_hop, next_hop_size, next_hop_flags, lifetime);
++    }
++    else {
++        ret = fib_create_entry(table, iface_id, dst, dst_size, dst_flags,
++                               next_hop, next_hop_size, next_hop_flags, lifetime);
++    }
++
++    mutex_unlock(&(table->mtx_access));
++    return ret;
+ }
+ 
+ int fib_update_entry(fib_table_t *table, uint8_t *dst, size_t dst_size,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-fib
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/div
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/frac
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 128036	  37800	  80456	 246292	  3c214	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+....................
+OK (20 tests)
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffcb616e000; bottom 0x00000043b000; size: 0x7ffcb5d33000 (140723359002624)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

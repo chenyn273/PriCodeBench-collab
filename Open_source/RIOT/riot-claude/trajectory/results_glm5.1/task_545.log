@@ -1,0 +1,70 @@
+============================================================
+=== Claude Session ===
+============================================================
+The `ipv6_hdr_get_fl` function is now implemented. It converts the `v_tc_fl` field from network byte order to host byte order, then masks with `0x000fffff` to extract the 20-bit flow label (bits 0–19), which occupies the least significant 20 bits after the 4-bit version and 8-bit traffic class fields.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/ipv6/hdr.h
++++ sys/include/net/ipv6/hdr.h
+@@ -259,7 +259,7 @@
+  */
+ static inline uint32_t ipv6_hdr_get_fl(const ipv6_hdr_t *hdr)
+ {
+-    /* MASKED - implement this function */
++    return byteorder_ntohl(hdr->v_tc_fl) & 0x000fffff;
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ipv6_hdr
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/crosslayer/inet_csum
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/net/network_layer/ipv6/hdr
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  85998	  34256	  78152	 198406	  30706	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+................
+OK (16 tests)
+
+native: exiting
+
+--- stderr ---
+==349==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffe9829e000; bottom 0x000000430000; size: 0x7ffe97e6e000 (140731446910976)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

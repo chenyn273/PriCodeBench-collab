@@ -1,0 +1,93 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `gnrc_pktbuf_remove_snip` does:
+
+1. **If `snip` is the head of the packet** (`pkt == snip`): saves `pkt->next` as the new head, unlinks the snip by setting `snip->next = NULL`, releases the snip via `gnrc_pktbuf_release`, and returns the new head.
+
+2. **Otherwise**: finds the predecessor using `gnrc_pkt_prev_snip`, unlinks `snip` by updating the predecessor's `next` pointer, sets `snip->next = NULL` (so `gnrc_pktbuf_release` only frees that one snip, not the rest of the chain), releases the snip, and returns the original `pkt` head.
+
+This follows the same unlinking pattern as the existing inline `gnrc_pkt_delete` in `pkt.h`, but adds the `gnrc_pktbuf_release` call to properly free the removed snip through the packet buffer — matching the function's documented contract: "Deletes a snip from a packet and the packet buffer."
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/pktbuf/gnrc_pktbuf.c
++++ sys/net/gnrc/pktbuf/gnrc_pktbuf.c
+@@ -27,7 +27,23 @@
+ gnrc_pktsnip_t *gnrc_pktbuf_remove_snip(gnrc_pktsnip_t *pkt,
+                                         gnrc_pktsnip_t *snip)
+ {
+-    /* MASKED - implement this function */
++    gnrc_pktsnip_t *tmp;
++
++    if (pkt == snip) {
++        tmp = pkt->next;
++        snip->next = NULL;
++        gnrc_pktbuf_release(snip);
++        return tmp;
++    }
++
++    tmp = gnrc_pkt_prev_snip(pkt, snip);
++    if (tmp != NULL) {
++        tmp->next = snip->next;
++        snip->next = NULL;
++        gnrc_pktbuf_release(snip);
++    }
++
++    return pkt;
+ }
+ 
+ gnrc_pktsnip_t *gnrc_pktbuf_reverse_snips(gnrc_pktsnip_t *pkt)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-pktbuf
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+   text	   data	    bss	    dec	    hex	filename
+ 119900	  38864	  84456	 243220	  3b614	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.............................................
+OK (45 tests)
+
+native: exiting
+
+--- stderr ---
+==347==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffebf9e3000; bottom 0x000000439000; size: 0x7ffebf5aa000 (140732108808192)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

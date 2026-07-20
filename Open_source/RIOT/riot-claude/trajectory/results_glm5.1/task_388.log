@@ -1,0 +1,96 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implemented `ztimer_remove` in `sys/ztimer/core.c`. The function:
+
+1. **Disables IRQs** for thread safety (same pattern as `ztimer_set` and `ztimer_is_set`)
+2. **Checks if the timer is set** using `_is_set()` — if not set, does nothing (matching the doc: "does nothing if timer is not found")
+3. **Removes from the list** using `_del_entry_from_list()`, which handles unlinking, offset adjustment, and the `last` pointer
+4. **Updates the clock** via `_ztimer_update()` if a timer was actually removed (re-arms or cancels the underlying hardware timer)
+5. **Releases the clock** via `ztimer_release()` under `MODULE_ZTIMER_ONDEMAND` (mirroring the acquire/release pairing in `ztimer_set`)
+6. **Restores IRQs** before the ondemand release (which does its own IRQ management), and returns whether removal succeeded
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/ztimer/core.c
++++ sys/ztimer/core.c
+@@ -133,7 +133,26 @@
+ 
+ bool ztimer_remove(ztimer_clock_t *clock, ztimer_t *timer)
+ {
+-    /* MASKED - implement this function */
++    unsigned state = irq_disable();
++
++    bool was_removed = false;
++    if (_is_set(clock, timer)) {
++        was_removed = _del_entry_from_list(clock, &timer->base);
++    }
++
++    if (was_removed) {
++        _ztimer_update(clock);
++    }
++
++    irq_restore(state);
++
++#if MODULE_ZTIMER_ONDEMAND
++    if (was_removed) {
++        ztimer_release(clock);
++    }
++#endif
++
++    return was_removed;
+ }
+ 
+ uint32_t ztimer_set(ztimer_clock_t *clock, ztimer_t *timer, uint32_t val)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ztimer
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+   text	   data	    bss	    dec	    hex	filename
+ 110646	  34200	  78120	 222966	  366f6	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+................
+OK (16 tests)
+
+native: exiting
+
+--- stderr ---
+==363==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffde6856000; bottom 0x000000436000; size: 0x7ffde6420000 (140728466538496)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+==363==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+
+
+

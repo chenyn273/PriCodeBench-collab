@@ -1,0 +1,97 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `universal_address_print_table` does:
+
+- Acquires the mutex for thread-safe access to the shared table
+- Iterates over all entries in `universal_address_table`
+- For each entry with `use_count > 0` (i.e., currently in use), prints the entry's address pointer, use count, address size, and the address content as hex bytes
+- Releases the mutex
+
+The output format follows the same style as `universal_address_print_entry` (same field labels and layout), but uses `%02x` hex output for the address bytes (appropriate for a table dump) rather than the `%c` character output used by the single-entry print function.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/universal_address/universal_address.c
++++ sys/universal_address/universal_address.c
+@@ -359,5 +359,23 @@
+ 
+ void universal_address_print_table(void)
+ {
+-    /* MASKED - implement this function */
+-}
++    mutex_lock(&mtx_access);
++
++    for (size_t i = 0; i < UNIVERSAL_ADDRESS_MAX_ENTRIES; ++i) {
++        if (universal_address_table[i].use_count > 0) {
++            printf("[universal_address_print_table] entry@: %p, use_count: %d, "
++                   "address_size: %d, content: ",
++                   (void *)&universal_address_table[i],
++                   (int)universal_address_table[i].use_count,
++                   (int)universal_address_table[i].address_size);
++
++            for (size_t j = 0; j < universal_address_table[i].address_size; ++j) {
++                printf("%02x ", universal_address_table[i].address[j]);
++            }
++
++            puts("");
++        }
++    }
++
++    mutex_unlock(&mtx_access);
++}
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-fib
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/div
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 128100	  37864	  80456	 246420	  3c294	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+....................
+OK (20 tests)
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd36765000; bottom 0x00000043b000; size: 0x7ffd3632a000 (140725512740864)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

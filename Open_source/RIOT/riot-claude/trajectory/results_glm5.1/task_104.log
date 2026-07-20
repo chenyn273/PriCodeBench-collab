@@ -1,0 +1,89 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation follows the established pattern in the file:
+
+1. **Acquire the mutex** — consistent with `fib_add_entry`, `fib_update_entry`, and all other public functions
+2. **Find the entry** by destination address using `fib_find_entry` — same lookup pattern as `fib_add_entry` and `fib_update_entry`
+3. **Remove the entry only on exact match** (`ret == 1`) — this ensures we only remove when `fib_find_entry` found an exact address match (not a prefix match where `ret == 0`)
+4. **Release the mutex** — always, whether or not an entry was found
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -453,7 +453,18 @@
+ 
+ void fib_remove_entry(fib_table_t *table, uint8_t *dst, size_t dst_size)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&(table->mtx_access));
++    DEBUG("[fib_remove_entry]\n");
++    size_t count = 1;
++    fib_entry_t *entry[count];
++
++    int ret = fib_find_entry(table, dst, dst_size, &(entry[0]), &count);
++
++    if (ret == 1) {
++        fib_remove(entry[0]);
++    }
++
++    mutex_unlock(&(table->mtx_access));
+ }
+ 
+ void fib_flush(fib_table_t *table, kernel_pid_t interface)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-fib
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/div
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 128036	  37800	  80456	 246292	  3c214	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+....................
+OK (20 tests)
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc36730000; bottom 0x00000043b000; size: 0x7ffc362f5000 (140721217556480)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

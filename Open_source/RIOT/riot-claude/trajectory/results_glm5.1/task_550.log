@@ -1,0 +1,85 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `ipv6_hdr_inet_csum` does:
+
+1. **Accumulates checksums** for the source and destination IPv6 addresses (16 bytes each) using `inet_csum`, which processes them as big-endian 16-bit words per RFC 1071
+2. **Adds the upper-layer packet length** (`len`) and **protocol number** (`prot_num`) — these correspond to the trailing 4 bytes of the pseudo-header (32-bit length + 3 zero bytes + 1-byte next header per RFC 8200 Section 8.1). Since the length field is a 32-bit big-endian value with the upper 16 bits being zero, and the lower 16 bits equal `len`, adding `len` directly after the zero-padding from the address fields correctly incorporates this. The 3 zero bytes contribute nothing, and `prot_num` is the final byte.
+3. **Folds carries** to produce a normalized 16-bit unnormalized checksum ready for further accumulation or final complement.
+
+This matches the pattern used by all three callers in the codebase (ICMPv6, UDP, TCP), which call this function last to fold in the pseudo-header before taking the final complement (`~csum`).
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/ipv6/hdr.h
++++ sys/include/net/ipv6/hdr.h
+@@ -283,7 +283,16 @@
+ static inline uint16_t ipv6_hdr_inet_csum(uint16_t sum, ipv6_hdr_t *hdr,
+                                           uint8_t prot_num, uint16_t len)
+ {
+-    /* MASKED - implement this function */
++    uint32_t csum = sum;
++    csum = inet_csum(csum, (uint8_t *)&hdr->src, sizeof(ipv6_addr_t));
++    csum = inet_csum(csum, (uint8_t *)&hdr->dst, sizeof(ipv6_addr_t));
++    csum += len;
++    csum += prot_num;
++    while (csum >> 16) {
++        uint16_t carry = csum >> 16;
++        csum = (csum & 0xffff) + carry;
++    }
++    return csum;
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/tests/unittests/tests-ipv6_hdr
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/crosslayer/inet_csum
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/net/network_layer/ipv6/hdr
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  86046	  34256	  78152	 198454	  30736	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+................
+OK (16 tests)
+
+native: exiting
+
+--- stderr ---
+==349==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffe64fa4000; bottom 0x000000430000; size: 0x7ffe64b74000 (140730588151808)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

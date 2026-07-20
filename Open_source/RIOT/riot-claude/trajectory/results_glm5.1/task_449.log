@@ -1,0 +1,69 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is `return !list->next;`. In this circular linked list, `list->next` points to the tail (last element), which is NULL when the list is empty. This is consistent with every other function in the file that checks `list->next` to determine emptiness, and matches the O(1) complexity noted in the documentation.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- core/lib/include/clist.h
++++ core/lib/include/clist.h
+@@ -114,7 +114,7 @@
+  */
+ static inline bool clist_is_empty(const clist_node_t *list)
+ {
+-    /* MASKED - implement this function */
++    return !list->next;
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/tests/unittests/tests-core
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 134947	  51816	  96776	 283539	  45393	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..............................................................................................................
+OK (110 tests)
+
+native: exiting
+
+--- stderr ---
+/usr/bin/ld: warning: /tmp/build/bin/native64/tests_unittests.elf has a LOAD segment with RWX permissions
+==364==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd760ad000; bottom 0x000000440000; size: 0x7ffd75c6d000 (140726579417088)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+==364==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+
+
+

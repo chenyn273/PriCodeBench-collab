@@ -1,0 +1,86 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation follows the documented semantics:
+
+1. **Count is 0**: Returns `-E2BIG` since there's no room for even the null terminator.
+2. **Truncation (src >= count)**: Copies `count - 1` bytes, null-terminates, and returns `-E2BIG`.
+3. **Success (src < count)**: Copies the full string including the null terminator via `memcpy(dest, src, len + 1)`, and returns the number of characters copied (excluding the null terminator).
+
+This matches the Linux kernel `strscpy` contract: always produces a valid null-terminated string in `dest`, returns the length on success, and `-E2BIG` on truncation or insufficient buffer space.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/libc/string.c
++++ sys/libc/string.c
+@@ -21,7 +21,20 @@
+ 
+ ssize_t strscpy(char *dest, const char *src, size_t count)
+ {
+-    /* MASKED - implement this function */
++    size_t len = strlen(src);
++
++    if (count == 0) {
++        return -E2BIG;
++    }
++
++    if (len >= count) {
++        memcpy(dest, src, count - 1);
++        dest[count - 1] = '\0';
++        return -E2BIG;
++    }
++
++    memcpy(dest, src, len + 1);
++    return len;
+ }
+ 
+ const void *memchk(const void *data, uint8_t c, size_t len)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-libc
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  79391	  32280	  78120	 189791	  2e55f	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+......
+OK (6 tests)
+
+native: exiting
+
+--- stderr ---
+==322==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc938f7000; bottom 0x00000042d000; size: 0x7ffc934ca000 (140722779758592)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

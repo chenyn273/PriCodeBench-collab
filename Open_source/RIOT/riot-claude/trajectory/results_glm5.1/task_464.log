@@ -1,0 +1,80 @@
+============================================================
+=== Claude Session ===
+============================================================
+API Error: 400 Bad Request
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-nanocoap
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/net/application_layer/nanocoap
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+
+--- stderr ---
+In file included from [01m[K/workspace/tests/unittests/tests-nanocoap/tests-nanocoap.c:19[m[K:
+[01m[K/workspace/sys/include/net/nanocoap.h:[m[K In function '[01m[Kcoap_get_proxy_uri[m[K':
+[01m[K/workspace/sys/include/net/nanocoap.h:1203:1:[m[K [01;31m[Kerror: [m[Kno return statement in function returning non-void [[01;31m[K-Werror=return-type[m[K]
+ 1203 | [01;31m[K}[m[K
+      | [01;31m[K^[m[K
+[01m[K/workspace/sys/include/net/nanocoap.h:1200:54:[m[K [01;31m[Kerror: [m[Kunused parameter '[01m[Kpkt[m[K' [[01;31m[K-Werror=unused-parameter[m[K]
+ 1200 | static inline ssize_t coap_get_proxy_uri([01;31m[Kcoap_pkt_t *pkt[m[K, char **target)
+      |                                          [01;31m[K~~~~~~~~~~~~^~~[m[K
+[01m[K/workspace/sys/include/net/nanocoap.h:1200:66:[m[K [01;31m[Kerror: [m[Kunused parameter '[01m[Ktarget[m[K' [[01;31m[K-Werror=unused-parameter[m[K]
+ 1200 | static inline ssize_t coap_get_proxy_uri(coap_pkt_t *pkt, [01;31m[Kchar **target[m[K)
+      |                                                           [01;31m[K~~~~~~~^~~~~~[m[K
+In file included from [01m[K/workspace/sys/net/application_layer/nanocoap/nanocoap.c:30[m[K:
+[01m[K/workspace/sys/include/net/nanocoap.h:[m[K In function '[01m[Kcoap_get_proxy_uri[m[K':
+[01m[K/workspace/sys/include/net/nanocoap.h:1203:1:[m[K [01;31m[Kerror: [m[Kno return statement in function returning non-void [[01;31m[K-Werror=return-type[m[K]
+ 1203 | [01;31m[K}[m[K
+      | [01;31m[K^[m[K
+[01m[K/workspace/sys/include/net/nanocoap.h:1200:54:[m[K [01;31m[Kerror: [m[Kunused parameter '[01m[Kpkt[m[K' [[01;31m[K-Werror=unused-parameter[m[K]
+ 1200 | static inline ssize_t coap_get_proxy_uri([01;31m[Kcoap_pkt_t *pkt[m[K, char **target)
+      |                                          [01;31m[K~~~~~~~~~~~~^~~[m[K
+[01m[K/workspace/sys/include/net/nanocoap.h:1200:66:[m[K [01;31m[Kerror: [m[Kunused parameter '[01m[Ktarget[m[K' [[01;31m[K-Werror=unused-parameter[m[K]
+ 1200 | static inline ssize_t coap_get_proxy_uri(coap_pkt_t *pkt, [01;31m[Kchar **target[m[K)
+      |                                                           [01;31m[K~~~~~~~^~~~~~[m[K
+In file included from [01m[K/workspace/sys/include/embUnit/embUnit.h:47[m[K,
+                 from [01m[K/workspace/sys/include/embUnit.h:25[m[K,
+                 from [01m[K/workspace/tests/unittests/tests-nanocoap/tests-nanocoap.c:17[m[K:
+[01m[K/workspace/tests/unittests/tests-nanocoap/tests-nanocoap.c:[m[K In function '[01m[Ktest_nanocoap__add_get_proxy_uri[m[K':
+[01m[K/workspace/tests/unittests/tests-nanocoap/tests-nanocoap.c:1086:30:[m[K [01;31m[Kerror: [m[K'[01m[Kuri[m[K' may be used uninitialized [[01;31m[K-Werror=maybe-uninitialized[m[K]
+ 1086 |     TEST_ASSERT_EQUAL_INT(0, strncmp((char *) proxy_uri, (char *) uri, len));
+[01m[K/workspace/sys/include/embUnit/AssertImpl.h:60:47:[m[K [01;36m[Knote: [m[Kin definition of macro '[01m[KTEST_ASSERT_EQUAL_INT[m[K'
+   60 |         long long ____actual__ = (long long) ([01;36m[Kactual_[m[K); \
+      |                                               [01;36m[K^~~~~~~[m[K
+[01m[K/workspace/tests/unittests/tests-nanocoap/tests-nanocoap.c:1082:11:[m[K [01;36m[Knote: [m[K'[01m[Kuri[m[K' was declared here
+ 1082 |     char *[01;36m[Kuri[m[K;
+      |           [01;36m[K^~~[m[K
+cc1: all warnings being treated as errors
+cc1: all warnings being treated as errors
+make[3]: *** [/workspace/Makefile.base:157: /tmp/build/bin/native64/nanocoap/nanocoap.o] Error 1
+make[2]: *** [/workspace/Makefile.base:31: ALL--/workspace/sys/net/application_layer/nanocoap] Error 2
+make[1]: *** [/workspace/Makefile.base:31: ALL--/workspace/sys] Error 2
+make[1]: *** Waiting for unfinished jobs....
+make[2]: *** [/workspace/Makefile.base:157: /tmp/build/bin/native64/tests-nanocoap/tests-nanocoap.o] Error 1
+make[1]: *** [/workspace/Makefile.base:31: ALL--/workspace/tests/unittests/tests-nanocoap] Error 2
+make: *** [/workspace/tests/unittests/../../Makefile.include:743: application_tests_unittests.module] Error 2
+
+
+

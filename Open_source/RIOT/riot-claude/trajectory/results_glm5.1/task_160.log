@@ -1,0 +1,83 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `gnrc_netreg_register` does:
+
+1. **Validates the type** — returns `-EINVAL` if the type is out of range (matching the documented return value and the same check used in `gnrc_netreg_unregister`)
+2. **Acquires exclusive lock** — using `_gnrc_netreg_acquire_exclusive()` to safely modify the shared registry (same pattern as `unregister`)
+3. **Appends the entry** — using `LL_APPEND(netreg[type], entry)` to add the entry to the linked list for that protocol type
+4. **Releases exclusive lock** — using `_gnrc_netreg_release_exclusive()` to allow readers/writers again
+5. **Returns 0** on success
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/netreg/gnrc_netreg.c
++++ sys/net/gnrc/netreg/gnrc_netreg.c
+@@ -131,7 +131,15 @@
+ 
+ int gnrc_netreg_register(gnrc_nettype_t type, gnrc_netreg_entry_t *entry)
+ {
+-    /* MASKED - implement this function */
++    if (_INVALID_TYPE(type)) {
++        return -EINVAL;
++    }
++
++    _gnrc_netreg_acquire_exclusive();
++    LL_APPEND(netreg[type], entry);
++    _gnrc_netreg_release_exclusive();
++
++    return 0;
+ }
+ 
+ void gnrc_netreg_unregister(gnrc_nettype_t type, gnrc_netreg_entry_t *entry)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-netreg
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/net/gnrc/netreg
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  81282	  33016	  78376	 192674	  2f0a2	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.............
+OK (13 tests)
+
+native: exiting
+
+--- stderr ---
+==333==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffce641a000; bottom 0x00000042d000; size: 0x7ffce5fed000 (140724167168000)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

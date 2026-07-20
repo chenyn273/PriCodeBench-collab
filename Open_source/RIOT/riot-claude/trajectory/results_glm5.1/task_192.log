@@ -1,0 +1,112 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `hmac_sha256_init` does:
+
+1. **Prepare the key block** — Allocates a 64-byte pad (`SHA256_INTERNAL_BLOCK_SIZE`), zeroes it, then either copies the key directly (if it fits) or hashes it first (if longer than 64 bytes).
+
+2. **Inner hash (ipad)** — Inits `c_in`, XORs every byte of `key_pad` with `0x36` (ipad), and feeds the result into `c_in` via `sha2xx_update`.
+
+3. **Outer hash (opad)** — Inits `c_out`, XORs every byte of `key_pad` with `0x36 ^ 0x5c` (effectively undoing the ipad XOR and applying opad), and feeds the result into `c_out` via `sha2xx_update`.
+
+This matches the standard HMAC construction (RFC 2104) and is consistent with how `hmac_sha256_update` feeds data into `c_in` and `hmac_sha256_final` finalizes `c_in` then feeds its digest into `c_out`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/hashes/sha256.c
++++ sys/hashes/sha256.c
+@@ -78,9 +78,36 @@
+     sha256_final(&c, digest);
+ }
+ 
++#define HMAC_IPAD 0x36
++#define HMAC_OPAD 0x5c
++
+ void hmac_sha256_init(hmac_context_t *ctx, const void *key, size_t key_length)
+ {
+-    /* MASKED - implement this function */
++    unsigned char key_pad[SHA256_INTERNAL_BLOCK_SIZE];
++
++    memset(key_pad, 0, SHA256_INTERNAL_BLOCK_SIZE);
++
++    if (key_length > SHA256_INTERNAL_BLOCK_SIZE) {
++        sha256_context_t key_hash;
++        sha256_init(&key_hash);
++        sha2xx_update(&key_hash, key, key_length);
++        sha256_final(&key_hash, key_pad);
++    }
++    else {
++        memcpy(key_pad, key, key_length);
++    }
++
++    sha256_init(&ctx->c_in);
++    for (unsigned i = 0; i < SHA256_INTERNAL_BLOCK_SIZE; i++) {
++        key_pad[i] ^= HMAC_IPAD;
++    }
++    sha2xx_update(&ctx->c_in, key_pad, SHA256_INTERNAL_BLOCK_SIZE);
++
++    sha256_init(&ctx->c_out);
++    for (unsigned i = 0; i < SHA256_INTERNAL_BLOCK_SIZE; i++) {
++        key_pad[i] ^= HMAC_IPAD ^ HMAC_OPAD;
++    }
++    sha2xx_update(&ctx->c_out, key_pad, SHA256_INTERNAL_BLOCK_SIZE);
+ }
+ 
+ void hmac_sha256_update(hmac_context_t *ctx, const void *data, size_t len)
+
+
+============================================================
+=== ILLEGAL MODIFICATIONS ===
+============================================================
+integrity violation: code outside target function changed
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/tests/unittests/tests-hashes
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/crypto
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/hashes
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 221556	  74296	  82656	 378508	  5c68c	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+...............................................................................
+OK (79 tests)
+
+native: exiting
+
+--- stderr ---
+/bin/sh: 1: hexdump: not found
+==439==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffcd35d2000; bottom 0x00000045a000; size: 0x7ffcd3178000 (140723850018816)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

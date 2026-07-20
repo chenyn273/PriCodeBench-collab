@@ -1,0 +1,99 @@
+============================================================
+=== Claude Session ===
+============================================================
+`EINVAL` is defined in `<errno.h>` which is already included at line 22. The implementation is complete.
+
+The `mtd_erase` function:
+1. Validates the `mtd` device pointer (returns `-ENODEV` if invalid)
+2. Computes sector size from `pages_per_sector * page_size`
+3. Validates that `addr` is sector-aligned (returns `-EINVAL` if not, matching the doc's "addr must be aligned on a sector boundary")
+4. Validates that `count` is a multiple of sector size (returns `-EINVAL` if not, matching the doc's "count must be a multiple of a sector size")
+5. Converts byte address/count to sector number/count and delegates to `mtd_erase_sector` (which handles `-EOVERFLOW` for out-of-bounds and `-ENOTSUP` for unsupported operations)
+
+
+============================================================
+=== Diff ===
+============================================================
+--- drivers/mtd/mtd.c
++++ drivers/mtd/mtd.c
+@@ -336,7 +336,24 @@
+ 
+ int mtd_erase(mtd_dev_t *mtd, uint32_t addr, uint32_t count)
+ {
+-    /* MASKED - implement this function */
++    if (!mtd || !mtd->driver) {
++        return -ENODEV;
++    }
++
++    const uint32_t sector_size = mtd->pages_per_sector * mtd->page_size;
++
++    if (addr % sector_size != 0) {
++        return -EINVAL;
++    }
++
++    if (count % sector_size != 0) {
++        return -EINVAL;
++    }
++
++    uint32_t sector = addr / sector_size;
++    uint32_t num = count / sector_size;
++
++    return mtd_erase_sector(mtd, sector, num);
+ }
+ 
+ int mtd_erase_sector(mtd_dev_t *mtd, uint32_t sector, uint32_t count)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-mtd
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/mtd
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/sys/libc
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/mtd
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/drivers/mtd_emulated
+"make" -C /workspace/cpu/native/vfs
+"make" -C /workspace/sys/vfs
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+ 104103	  33560	  79168	 216831	  34eff	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..
+mtd_tests.test_mtd_erase (tests/unittests/tests-mtd/tests-mtd.c 68) exp -75 was -22
+....
+run 6 failures 1
+
+native: exiting
+
+--- stderr ---
+/usr/bin/ld: warning: /tmp/build/bin/native64/tests_unittests.elf has a LOAD segment with RWX permissions
+==362==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffe2b7d0000; bottom 0x000000433000; size: 0x7ffe2b39d000 (140729623629824)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,108 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation:
+
+- Locks the pktbuf mutex (consistent with all other public functions)
+- Sets `_first_unused` to the start of `_static_buf`
+- Sets `next` to `NULL` (single free block, end of list)
+- Sets `size` to the full buffer size (`sizeof(_static_buf)`)
+- Resets the `max_byte_count` under `DEVELHELP`
+
+This matches the invariants checked by `gnrc_pktbuf_is_empty()` (line 303-306) and `gnrc_pktbuf_is_sane()` (line 308-340), which expect `_first_unused` to equal `_static_buf` with size equal to the full buffer and no next entry.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/pktbuf_static/gnrc_pktbuf_static.c
++++ sys/net/gnrc/pktbuf_static/gnrc_pktbuf_static.c
+@@ -68,7 +68,14 @@
+ 
+ void gnrc_pktbuf_init(void)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&gnrc_pktbuf_mutex);
++    _first_unused = (_unused_t *)_static_buf;
++    _first_unused->next = NULL;
++    _first_unused->size = sizeof(_static_buf);
++#ifdef DEVELHELP
++    max_byte_count = 0;
++#endif
++    mutex_unlock(&gnrc_pktbuf_mutex);
+ }
+ 
+ gnrc_pktsnip_t *gnrc_pktbuf_add(gnrc_pktsnip_t *next, const void *data, size_t size,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-gnrc_ipv6
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/event
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/evtimer
+"make" -C /workspace/sys/fmt
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/luid
+"make" -C /workspace/sys/net/crosslayer/inet_csum
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/net/link_layer/l2util
+"make" -C /workspace/sys/net/netif
+"make" -C /workspace/sys/net/network_layer/icmpv6
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/net/gnrc/netapi
+"make" -C /workspace/sys/net/gnrc/netif
+"make" -C /workspace/sys/net/gnrc/netreg
+"make" -C /workspace/sys/net/network_layer/ipv6/hdr
+"make" -C /workspace/sys/net/gnrc/network_layer/icmpv6
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6/hdr
+"make" -C /workspace/sys/random
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6/nib
+"make" -C /workspace/sys/net/gnrc/network_layer/ndp
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+"make" -C /workspace/sys/net/gnrc/netif/hdr
+   text	   data	    bss	    dec	    hex	filename
+ 135289	  41768	 103912	 280969	  44989	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........
+OK (8 tests)
+
+native: exiting
+
+--- stderr ---
+==591==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffdeb149000; bottom 0x00000043d000; size: 0x7ffdead0c000 (140728543002624)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,193 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `dns_msg_parse_reply` does:
+
+1. **Validates the header** — checks the buffer is large enough for `dns_hdr_t`, verifies the QR bit indicates a response, and checks RCODE is zero (no error)
+2. **Skips the question section** — iterates over `qdcount` questions, using `_skip_hostname` for each domain name, then skipping QTYPE+QCLASS
+3. **Scans answer records** — iterates over `ancount` answers, parsing each resource record's TYPE, CLASS, TTL, and RDLENGTH. For matching records (AAAA for AF_INET6/AF_UNSPEC, A for AF_INET/AF_UNSPEC), copies the address data into `addr_out` and the TTL into `ttl`, returning the address length
+4. **Returns `-EBADMSG`** if no matching address record is found, or if any bounds check fails
+
+The implementation follows the DNS wire format per RFC 1035, uses the existing helper functions (`_skip_hostname`, `_get_short`), and matches the API contract documented in the header: returns address length on success, `-EBADMSG` on failure.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/application_layer/dns/msg.c
++++ sys/net/application_layer/dns/msg.c
+@@ -140,7 +140,93 @@
+ int dns_msg_parse_reply(const uint8_t *buf, size_t len, int family,
+                         void *addr_out, uint32_t *ttl)
+ {
+-    /* MASKED - implement this function */
++    const uint8_t *buflim = buf + len;
++    const dns_hdr_t *hdr = (const dns_hdr_t *)buf;
++    const uint8_t *bufpos = buf + sizeof(dns_hdr_t);
++
++    if (len < sizeof(dns_hdr_t)) {
++        DEBUG("dns_msg: reply too small\n");
++        return -EBADMSG;
++    }
++
++    /* check QR bit (response) and RCODE (no error) */
++    if ((ntohs(hdr->flags) & 0x8000) == 0) {
++        DEBUG("dns_msg: not a response\n");
++        return -EBADMSG;
++    }
++    if ((ntohs(hdr->flags) & 0x000f) != 0) {
++        DEBUG("dns_msg: response error code %u\n",
++              ntohs(hdr->flags) & 0x000f);
++        return -EBADMSG;
++    }
++
++    /* skip question section */
++    unsigned qdcount = ntohs(hdr->qdcount);
++    for (unsigned i = 0; i < qdcount; i++) {
++        ssize_t hostname_len = _skip_hostname(buf, len, bufpos);
++        if (hostname_len < 0) {
++            return hostname_len;
++        }
++        bufpos += hostname_len;
++        /* skip QTYPE (2) + QCLASS (2) */
++        bufpos += RR_TYPE_LENGTH + RR_CLASS_LENGTH;
++        if (bufpos > buflim) {
++            DEBUG("dns_msg: question section overflow\n");
++            return -EBADMSG;
++        }
++    }
++
++    /* iterate over answer records */
++    unsigned ancount = ntohs(hdr->ancount);
++    for (unsigned i = 0; i < ancount; i++) {
++        ssize_t hostname_len = _skip_hostname(buf, len, bufpos);
++        if (hostname_len < 0) {
++            return hostname_len;
++        }
++        bufpos += hostname_len;
++
++        /* need at least TYPE(2) + CLASS(2) + TTL(4) + RDLENGTH(2) = 10 bytes */
++        if ((bufpos + RR_TYPE_LENGTH + RR_CLASS_LENGTH +
++             RR_TTL_LENGTH + RR_RDLENGTH_LENGTH) > buflim) {
++            DEBUG("dns_msg: answer record overflow\n");
++            return -EBADMSG;
++        }
++
++        uint16_t rr_type = ntohs(_get_short(bufpos));
++        bufpos += RR_TYPE_LENGTH;
++        /* skip CLASS */
++        bufpos += RR_CLASS_LENGTH;
++
++        uint32_t _ttl;
++        memcpy(&_ttl, bufpos, sizeof(_ttl));
++        *ttl = ntohl(_ttl);
++        bufpos += RR_TTL_LENGTH;
++
++        uint16_t rdlength = ntohs(_get_short(bufpos));
++        bufpos += RR_RDLENGTH_LENGTH;
++
++        if ((bufpos + rdlength) > buflim) {
++            DEBUG("dns_msg: RDATA overflow\n");
++            return -EBADMSG;
++        }
++
++        if ((family == AF_INET6 || family == AF_UNSPEC) &&
++            rr_type == DNS_TYPE_AAAA && rdlength == 16) {
++            memcpy(addr_out, bufpos, rdlength);
++            return rdlength;
++        }
++
++        if ((family == AF_INET || family == AF_UNSPEC) &&
++            rr_type == DNS_TYPE_A && rdlength == 4) {
++            memcpy(addr_out, bufpos, rdlength);
++            return rdlength;
++        }
++
++        bufpos += rdlength;
++    }
++
++    DEBUG("dns_msg: no matching record found\n");
++    return -EBADMSG;
+ }
+ 
+ /** @} */
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-dns_msg
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/event
+"make" -C /workspace/sys/evtimer
+"make" -C /workspace/sys/fmt
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/iolist
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/luid
+"make" -C /workspace/sys/net/application_layer/dns
+"make" -C /workspace/sys/net/crosslayer/inet_csum
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/net/link_layer/l2util
+"make" -C /workspace/sys/net/netif
+"make" -C /workspace/sys/net/network_layer/icmpv6
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/net/network_layer/ipv6/hdr
+"make" -C /workspace/sys/net/gnrc/netapi
+"make" -C /workspace/sys/net/transport_layer/udp
+"make" -C /workspace/sys/net/gnrc/netif
+"make" -C /workspace/sys/net/gnrc/netreg
+"make" -C /workspace/sys/posix/inet
+"make" -C /workspace/sys/net/gnrc/network_layer/icmpv6
+"make" -C /workspace/sys/random
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6/hdr
+"make" -C /workspace/sys/net/gnrc/netif/hdr
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6/nib
+"make" -C /workspace/sys/net/gnrc/network_layer/ndp
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+"make" -C /workspace/sys/net/gnrc/sock
+"make" -C /workspace/sys/net/gnrc/sock/udp
+"make" -C /workspace/sys/net/gnrc/transport_layer/udp
+   text	   data	    bss	    dec	    hex	filename
+ 139657	  41136	 112168	 292961	  47861	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+...
+OK (3 tests)
+
+native: exiting
+
+--- stderr ---
+==643==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc2584d000; bottom 0x00000043e000; size: 0x7ffc2540f000 (140720933498880)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

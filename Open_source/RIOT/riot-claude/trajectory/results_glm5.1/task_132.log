@@ -1,0 +1,151 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `gcoap_get_resource_list` now does:
+
+1. **Validates content format** — returns `-1` if not `COAP_FORMAT_LINK` (the only supported format per the docs)
+2. **Iterates all registered listeners** — respects the `tl_type` filter using the same DTLS transport check pattern used in `_find_resource`
+3. **Iterates each listener's resources** — skips `/.well-known/core` (which should not list itself, matching the comment on `_well_known_core_handler`)
+4. **Calls `link_encoder` per resource** — sets `COAP_LINK_FLAG_INIT_RESLIST` for the first resource (to suppress the leading comma), then clears it for subsequent entries
+5. **Supports `buf == NULL`** — the `link_encoder` (via `gcoap_encode_link`) returns the writable size even when the buffer pointer is NULL, per the API contract
+6. **Returns total bytes written** (or would-be-written if `buf` is NULL), or `-1` on error
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/application_layer/gcoap/gcoap.c
++++ sys/net/application_layer/gcoap/gcoap.c
+@@ -2000,7 +2000,46 @@
+ int gcoap_get_resource_list(void *buf, size_t maxlen, uint8_t cf,
+                                gcoap_socket_type_t tl_type)
+ {
+-    /* MASKED - implement this function */
++    (void)cf;
++    int pos = 0;
++    coap_link_encoder_ctx_t ctx;
++
++    if (cf != COAP_FORMAT_LINK) {
++        return -1;
++    }
++
++    ctx.content_format = cf;
++    ctx.flags = COAP_LINK_FLAG_INIT_RESLIST;
++
++    gcoap_listener_t *listener = _coap_state.listeners;
++
++    while (listener) {
++        if (IS_USED(MODULE_GCOAP_DTLS) &&
++            (listener->tl_type != GCOAP_SOCKET_TYPE_UNDEF) &&
++            !(listener->tl_type & tl_type)) {
++            listener = listener->next;
++            continue;
++        }
++
++        for (unsigned i = 0; i < listener->resources_len; i++) {
++            const coap_resource_t *resource = &listener->resources[i];
++            /* skip /.well-known/core */
++            if (resource->handler == _well_known_core_handler) {
++                continue;
++            }
++            ctx.link_pos = pos;
++            ssize_t res = listener->link_encoder(resource, (buf) ? (char *)buf + pos : NULL,
++                                                 maxlen - pos, &ctx);
++            if (res < 0) {
++                return -1;
++            }
++            ctx.flags &= ~COAP_LINK_FLAG_INIT_RESLIST;
++            pos += res;
++        }
++        listener = listener->next;
++    }
++
++    return pos;
+ }
+ 
+ ssize_t gcoap_encode_link(const coap_resource_t *resource, char *buf,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-gcoap
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/event
+"make" -C /workspace/sys/evtimer
+"make" -C /workspace/sys/fmt
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/iolist
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/luid
+"make" -C /workspace/sys/net/application_layer/gcoap
+"make" -C /workspace/sys/net/application_layer/nanocoap
+"make" -C /workspace/sys/net/crosslayer/inet_csum
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/net/link_layer/l2util
+"make" -C /workspace/sys/net/netif
+"make" -C /workspace/sys/net/network_layer/icmpv6
+"make" -C /workspace/sys/net/gnrc/netapi
+"make" -C /workspace/sys/net/gnrc/netif
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/net/gnrc/netreg
+"make" -C /workspace/sys/net/network_layer/ipv6/hdr
+"make" -C /workspace/sys/net/gnrc/network_layer/icmpv6
+"make" -C /workspace/sys/net/sock
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6
+"make" -C /workspace/sys/net/sock/async/event
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6/hdr
+"make" -C /workspace/sys/net/gnrc/netif/hdr
+"make" -C /workspace/sys/net/gnrc/network_layer/ipv6/nib
+"make" -C /workspace/sys/net/gnrc/network_layer/ndp
+"make" -C /workspace/sys/net/transport_layer/udp
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/posix/inet
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/random
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/net/gnrc/sock
+"make" -C /workspace/sys/net/gnrc/sock/udp
+"make" -C /workspace/sys/net/gnrc/transport_layer/udp
+   text	   data	    bss	    dec	    hex	filename
+ 167168	  44808	 129416	 341392	  53590	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+...........
+gcoap_tests.test_gcoap__server_get_resource_list (tests/unittests/tests-gcoap/tests-gcoap.c 383) exp 0 was -1
+
+run 11 failures 1
+
+native: exiting
+
+--- stderr ---
+==670==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffca389b000; bottom 0x000000447000; size: 0x7ffca3454000 (140723047710720)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

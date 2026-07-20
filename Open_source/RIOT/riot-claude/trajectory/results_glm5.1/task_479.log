@@ -1,0 +1,70 @@
+============================================================
+=== Claude Session ===
+============================================================
+Done. `color_rgb_invert` now inverts each RGB component by subtracting it from 255 (e.g., `0x00` → `0xFF`, `0x80` → `0x7F`), which is the standard RGB color inversion.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/color.h
++++ sys/include/color.h
+@@ -121,7 +121,9 @@
+  */
+ static inline void color_rgb_invert(const color_rgb_t *rgb, color_rgb_t *inv_rgb)
+ {
+-    /* MASKED - implement this function */
++    inv_rgb->r = 255 - rgb->r;
++    inv_rgb->g = 255 - rgb->g;
++    inv_rgb->b = 255 - rgb->b;
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/tests/unittests/tests-color
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/color
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  97980	  32408	  78120	 208508	  32e7c	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.........
+OK (9 tests)
+
+native: exiting
+
+--- stderr ---
+==330==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd313a9000; bottom 0x000000432000; size: 0x7ffd30f77000 (140725424975872)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

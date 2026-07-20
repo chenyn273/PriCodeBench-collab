@@ -1,0 +1,109 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's a summary of what `vfs_umount` does:
+
+1. **Validates inputs** - returns `-EINVAL` if `mountp`, `mountp->fs`, or `mountp->mount_point` is NULL
+2. **Locks the mount mutex** to protect the mount list during modification
+3. **Checks the mount is actually mounted** - searches `_vfs_mounts_list` for the mount point; returns `-EINVAL` if not found
+4. **Checks for open files** - if `open_files > 0` and `force` is false, returns `-EBUSY`
+5. **Calls the file system driver's umount** - if `fs_op->umount` exists, calls it and propagates errors
+6. **Removes from the mount list** via `clist_remove`
+7. **Unlocks the mutex** and returns 0 on success
+
+This mirrors the pattern of `vfs_mount` (which adds to the list and calls `fs_op->mount`) and `check_mount` (which validates inputs and checks for duplicates), and is consistent with the `auto_unmount_vfs` usage that passes `force=true`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/vfs/vfs.c
++++ sys/vfs/vfs.c
+@@ -607,7 +607,35 @@
+ 
+ int vfs_umount(vfs_mount_t *mountp, bool force)
+ {
+-    /* MASKED - implement this function */
++    DEBUG("vfs_umount: %p\n", (void *)mountp);
++    if ((mountp == NULL) || (mountp->fs == NULL) || (mountp->mount_point == NULL)) {
++        return -EINVAL;
++    }
++    mutex_lock(&_mount_mutex);
++    clist_node_t *found = clist_find(&_vfs_mounts_list, &mountp->list_entry);
++    if (found == NULL) {
++        mutex_unlock(&_mount_mutex);
++        return -EINVAL;
++    }
++    if ((mountp->open_files > 0) && !force) {
++        mutex_unlock(&_mount_mutex);
++        DEBUG("vfs_umount: file system still in use\n");
++        return -EBUSY;
++    }
++    if (mountp->fs->fs_op != NULL) {
++        if (mountp->fs->fs_op->umount != NULL) {
++            int res = mountp->fs->fs_op->umount(mountp);
++            if (res < 0) {
++                mutex_unlock(&_mount_mutex);
++                DEBUG("vfs_umount: umount error %d\n", res);
++                return res;
++            }
++        }
++    }
++    clist_remove(&_vfs_mounts_list, &mountp->list_entry);
++    mutex_unlock(&_mount_mutex);
++    DEBUG("vfs_umount: mount done\n");
++    return 0;
+ }
+ 
+ int vfs_rename(const char *from_path, const char *to_path)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-vfs
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/vfs
+"make" -C /workspace/sys/fs/constfs
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/vfs
+   text	   data	    bss	    dec	    hex	filename
+ 123378	  45128	  79328	 247834	  3c81a	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........................................
+OK (40 tests)
+
+native: exiting
+
+--- stderr ---
+/usr/bin/ld: warning: /tmp/build/bin/native64/tests_unittests.elf has a LOAD segment with RWX permissions
+==367==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffcec05e000; bottom 0x00000043b000; size: 0x7ffcebc23000 (140724263858176)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

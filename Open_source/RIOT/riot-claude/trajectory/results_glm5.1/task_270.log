@@ -1,0 +1,89 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation:
+
+1. Copies the `element` into a temporary buffer
+2. Hashes it in-place `(chain_length - element_index - 1)` times — the number of hops needed to reach the tail from the claimed index
+3. Compares the result against `tail_element` using `memcmp`
+4. Returns `0` if they match (verified), `1` otherwise (not verified)
+
+This matches the convention used by `sha256_chain` and `sha256_chain_with_waypoints`: the chain is indexed from 0 to `chain_length - 1`, where each element is the SHA-256 hash of the previous one.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/hashes/sha256.c
++++ sys/hashes/sha256.c
+@@ -265,5 +265,18 @@
+                                 void *tail_element,
+                                 size_t chain_length)
+ {
+-    /* MASKED - implement this function */
+-}
++    unsigned char tmp_element[SHA256_DIGEST_LENGTH];
++
++    /* hash the given element (chain_length - element_index - 1) times */
++    memcpy(tmp_element, element, SHA256_DIGEST_LENGTH);
++    for (size_t i = element_index; i < (chain_length - 1); ++i) {
++        sha256_inplace(tmp_element);
++    }
++
++    /* compare the result with the tail_element */
++    if (memcmp(tmp_element, tail_element, SHA256_DIGEST_LENGTH) == 0) {
++        return 0;
++    }
++
++    return 1;
++}
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-hashes
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/crypto
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/hashes
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 221514	  74296	  82656	 378466	  5c662	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+...............................................................................
+OK (79 tests)
+
+native: exiting
+
+--- stderr ---
+/bin/sh: 1: hexdump: not found
+==439==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc18e0e000; bottom 0x00000045a000; size: 0x7ffc189b4000 (140720721313792)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

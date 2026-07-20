@@ -1,0 +1,76 @@
+============================================================
+=== Claude Session ===
+============================================================
+Done. The implementation follows the established pattern in the codebase:
+
+1. **Acquire shared lock** — protects the netreg lists during the read, consistent with `gnrc_netreg_num` and the `_gnrc_netreg_assert_shared()` check inside `_netreg_lookup`.
+2. **Call `_netreg_lookup(NULL, type, demux_ctx)`** — passing `NULL` as `from` starts the search from the head of the list for the given type, returning the first matching entry.
+3. **Release shared lock** and return the result.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/netreg/gnrc_netreg.c
++++ sys/net/gnrc/netreg/gnrc_netreg.c
+@@ -223,7 +223,10 @@
+ 
+ gnrc_netreg_entry_t *gnrc_netreg_lookup(gnrc_nettype_t type, uint32_t demux_ctx)
+ {
+-    /* MASKED - implement this function */
++    gnrc_netreg_acquire_shared();
++    gnrc_netreg_entry_t *res = _netreg_lookup(NULL, type, demux_ctx);
++    gnrc_netreg_release_shared();
++    return res;
+ }
+ 
+ int gnrc_netreg_num(gnrc_nettype_t type, uint32_t demux_ctx)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/tests/unittests/tests-netreg
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/net/gnrc/netreg
+   text	   data	    bss	    dec	    hex	filename
+  81298	  33016	  78376	 192690	  2f0b2	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.............
+OK (13 tests)
+
+native: exiting
+
+--- stderr ---
+==333==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffe6b93a000; bottom 0x00000042d000; size: 0x7ffe6b50d000 (140730698878976)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

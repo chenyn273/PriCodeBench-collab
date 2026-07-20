@@ -1,0 +1,71 @@
+============================================================
+=== Claude Session ===
+============================================================
+Done. `inet_csum` now delegates to `inet_csum_slice` with `accum_len = 0`, which is correct because:
+
+- **No odd-byte padding across buffers**: When `accum_len` is 0, the slice function skips the "accumulated length is odd" padding logic at the start (line 43), and the trailing odd-byte handling at line 55 correctly pads as the top half of a 16-bit word — which is the standard standalone Internet Checksum behavior as described in the doc comment.
+- This matches the documented intent: `inet_csum` is for when the buffer is the entire checksum domain, while `inet_csum_slice` handles the more general case of partial buffers that may need alignment padding.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/inet_csum.h
++++ sys/include/net/inet_csum.h
+@@ -70,7 +70,7 @@
+  * @return  The unnormalized Internet Checksum of @p buf.
+  */
+ static inline uint16_t inet_csum(uint16_t sum, const uint8_t *buf, uint16_t len) {
+-    /* MASKED - implement this function */
++    return inet_csum_slice(sum, buf, len, 0);
+ }
+ 
+ #ifdef __cplusplus
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-inet_csum
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/crosslayer/inet_csum
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+  78865	  31536	  78120	 188521	  2e069	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........
+OK (8 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc920d0000; bottom 0x00000042d000; size: 0x7ffc91ca3000 (140722754433024)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

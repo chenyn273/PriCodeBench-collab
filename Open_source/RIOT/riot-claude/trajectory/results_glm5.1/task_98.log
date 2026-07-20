@@ -1,0 +1,93 @@
+============================================================
+=== Claude Session ===
+============================================================
+The `fib_devel_get_lifetime` function is now implemented. It:
+
+1. Locks the table mutex for thread safety
+2. Uses the existing `fib_find_entry` to look up the destination address
+3. If found (exact match `ret == 1` or prefix match `ret == 0`), copies the entry's absolute expiration time (`lifetime` field) to the output parameter and returns 0
+4. If no matching entry is found, returns `-EHOSTUNREACH`
+5. Unlocks the mutex in all paths
+
+This follows the same patterns used by other functions in the file (e.g., `fib_get_next_hop`, `fib_remove_entry`) for entry lookup, mutex handling, and error codes.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -1626,6 +1626,19 @@
+ int fib_devel_get_lifetime(fib_table_t *table, uint64_t *lifetime, uint8_t *dst,
+                            size_t dst_size)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&(table->mtx_access));
++    size_t count = 1;
++    fib_entry_t *entry[count];
++
++    int ret = fib_find_entry(table, dst, dst_size, &(entry[0]), &count);
++
++    if (ret == 0 || ret == 1) {
++        *lifetime = entry[0]->lifetime;
++        mutex_unlock(&(table->mtx_access));
++        return 0;
++    }
++
++    mutex_unlock(&(table->mtx_access));
++    return -EHOSTUNREACH;
+ }
+ #endif
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-fib
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/div
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 127624	  37800	  80456	 245880	  3c078	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+....................
+OK (20 tests)
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffeae1a1000; bottom 0x00000043b000; size: 0x7ffeadd66000 (140731814928384)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

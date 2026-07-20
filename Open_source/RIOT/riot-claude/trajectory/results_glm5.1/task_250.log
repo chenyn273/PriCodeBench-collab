@@ -1,0 +1,87 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implemented `rtc_set_time` following the established patterns in the file:
+
+1. **`rtt_clear_alarm()`** — disables the RTT alarm to prevent race conditions (same as `rtc_set_alarm` and `rtt_rtc_settimeofday`)
+2. **`rtc_tm_normalize(time)`** — normalizes the `struct tm` input (same as `rtc_set_alarm`)
+3. **`rtc_mktime(time)`** — converts to epoch seconds and stores in `rtc_now` (same as `rtc_set_alarm`)
+4. **`rtt_set_counter(0)` + `last_alarm = 0`** — resets the RTT baseline so the epoch mapping is clean (mirrors `rtt_rtc_settimeofday` which sets the counter to the sub-second portion)
+5. **`_update_alarm(0)`** — re-establishes the RTT alarm with the new time baseline
+
+
+============================================================
+=== Diff ===
+============================================================
+--- drivers/rtt_rtc/rtt_rtc.c
++++ drivers/rtt_rtc/rtt_rtc.c
+@@ -124,7 +124,18 @@
+ 
+ int rtc_set_time(struct tm *time)
+ {
+-    /* MASKED - implement this function */
++    /* disable alarm to prevent race condition */
++    rtt_clear_alarm();
++
++    rtc_tm_normalize(time);
++
++    rtc_now = rtc_mktime(time);
++    rtt_set_counter(0);
++    last_alarm = 0;
++    /* calculate next wake-up period */
++    _update_alarm(0);
++
++    return 0;
+ }
+ 
+ int rtc_get_time_ms(struct tm *time, uint16_t *ms)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-rtt_rtc
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/drivers/rtt_rtc
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/rtc_utils
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+   text	   data	    bss	    dec	    hex	filename
+  89116	  32224	  78728	 200068	  30d84	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....
+OK (5 tests)
+
+native: exiting
+
+--- stderr ---
+==352==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd0a565000; bottom 0x00000042f000; size: 0x7ffd0a136000 (140724772495360)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

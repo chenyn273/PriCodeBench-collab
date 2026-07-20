@@ -1,0 +1,86 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implemented `unicoap_pdu_build_rfc7252`. The function builds a complete RFC 7252 PDU into a contiguous buffer by:
+
+1. Writing the header (4-byte fixed header + token) via `unicoap_pdu_build_header_rfc7252`
+2. Writing options, payload marker, and payload via `unicoap_pdu_build_options_and_payload`
+3. Returning the total PDU size, or propagating any `-ENOBUFS` error from the sub-functions
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/unicoap/message.h
++++ sys/include/net/unicoap/message.h
+@@ -1312,7 +1312,19 @@
+                                                 const unicoap_message_t* message,
+                                                 const unicoap_message_properties_t* properties)
+ {
+-    /* MASKED - implement this function */
++    ssize_t header_size = unicoap_pdu_build_header_rfc7252(pdu, capacity, message, properties);
++    if (header_size < 0) {
++        return header_size;
++    }
++
++    ssize_t options_and_payload_size = unicoap_pdu_build_options_and_payload(pdu + header_size,
++                                                                              capacity - header_size,
++                                                                              message);
++    if (options_and_payload_size < 0) {
++        return options_and_payload_size;
++    }
++
++    return header_size + options_and_payload_size;
+ }
+ 
+ /* MARK: unicoap_driver_extension_point */
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-unicoap
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/iolist
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/application_layer/unicoap
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/net/application_layer/unicoap/drivers/rfc7252/common/pdu
+   text	   data	    bss	    dec	    hex	filename
+ 125179	  43144	  82464	 250787	  3d3a3	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+................
+OK (16 tests)
+
+native: exiting
+
+--- stderr ---
+==355==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff1dbfb000; bottom 0x00000043c000; size: 0x7fff1d7bf000 (140733688049664)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

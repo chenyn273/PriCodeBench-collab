@@ -1,0 +1,120 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implemented `gnrc_pktbuf_is_sane` at line 317. The function walks the `_first_unused` linked list and verifies these invariants:
+
+- **Null list is sane** — if `_first_unused` is NULL (buffer fully allocated), that's valid
+- **All blocks within buffer** — each unused block's start address must be inside `_static_buf` (via `gnrc_pktbuf_contains`)
+- **Non-zero sizes** — an unused block with size 0 is invalid
+- **No overflow past buffer end** — `ptr + size` must not exceed the buffer boundary
+- **Sorted by address** — each `next` pointer must be strictly greater than the current pointer
+- **No overlapping regions** — each next block must start at or after the current block ends
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/pktbuf_static/gnrc_pktbuf_static.c
++++ sys/net/gnrc/pktbuf_static/gnrc_pktbuf_static.c
+@@ -316,7 +316,49 @@
+ 
+ bool gnrc_pktbuf_is_sane(void)
+ {
+-    /* MASKED - implement this function */
++    _unused_t *ptr = _first_unused;
++
++    if (ptr == NULL) {
++        return true;
++    }
++
++    /* first unused must be within the buffer */
++    if (!gnrc_pktbuf_contains(ptr)) {
++        return false;
++    }
++
++    while (ptr) {
++        /* size must not be 0 */
++        if (ptr->size == 0) {
++            return false;
++        }
++
++        /* block must not extend past end of buffer */
++        if (!gnrc_pktbuf_contains((uint8_t *)ptr + ptr->size - 1)) {
++            return false;
++        }
++
++        if (ptr->next != NULL) {
++            /* next must be within the buffer */
++            if (!gnrc_pktbuf_contains(ptr->next)) {
++                return false;
++            }
++
++            /* list must be sorted by address */
++            if ((uintptr_t)ptr->next <= (uintptr_t)ptr) {
++                return false;
++            }
++
++            /* no overlap: next must start after current block ends */
++            if ((uintptr_t)ptr->next < (uintptr_t)ptr + ptr->size) {
++                return false;
++            }
++        }
++
++        ptr = ptr->next;
++    }
++
++    return true;
+ }
+ #endif
+ 
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-pktbuf
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+   text	   data	    bss	    dec	    hex	filename
+ 119862	  38864	  84456	 243182	  3b5ee	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.............................................
+OK (45 tests)
+
+native: exiting
+
+--- stderr ---
+==347==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffcb3db3000; bottom 0x000000439000; size: 0x7ffcb397a000 (140723321544704)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

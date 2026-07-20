@@ -1,0 +1,125 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's a summary of `uri_parser_split_query`:
+
+- **Returns 0** if `uri_parsed->query` is NULL (no query string)
+- **Splits the query** on `&` delimiters, then splits each param on `=` to get name/value pairs
+- **Returns -1** if any param lacks an `=` (parsing error)
+- **Returns -2** if the number of params exceeds `params_len` (truncation — fills `params_len` entries, reports overflow)
+- **Returns the count** of filled entries on success
+- Uses the existing `_strchrb` helper for buffer-safe string searching (consistent with the rest of the file)
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/uri_parser/uri_parser.c
++++ sys/uri_parser/uri_parser.c
+@@ -344,9 +344,52 @@
+     return uri_parser_process(result, uri, strlen(uri));
+ }
+ 
+-int uri_parser_split_query(const uri_parser_result_t *uri,
++int uri_parser_split_query(const uri_parser_result_t *uri_parsed,
+                            uri_parser_query_param_t *params,
+                            size_t params_len)
+ {
+-    /* MASKED - implement this function */
+-}
++    assert(uri_parsed);
++    assert(params);
++
++    if (uri_parsed->query == NULL) {
++        return 0;
++    }
++
++    const char *query = uri_parsed->query;
++    const char *query_end = query + uri_parsed->query_len;
++    size_t idx = 0;
++
++    while (query < query_end) {
++        const char *param_end = _strchrb(query, query_end, '&');
++        if (!param_end) {
++            param_end = query_end;
++        }
++
++        const char *eq = _strchrb(query, param_end, '=');
++        if (!eq) {
++            return -1;
++        }
++
++        if (idx < params_len) {
++            params[idx].name = query;
++            params[idx].name_len = eq - query;
++            params[idx].value = eq + 1;
++            params[idx].value_len = param_end - (eq + 1);
++        }
++
++        idx++;
++
++        if (param_end < query_end) {
++            query = param_end + 1;
++        }
++        else {
++            break;
++        }
++    }
++
++    if (idx > params_len) {
++        return -2;
++    }
++
++    return (int)idx;
++}
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-uri_parser
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/fmt
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/uri_parser
+   text	   data	    bss	    dec	    hex	filename
+ 107509	  40848	  78400	 226757	  375c5	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........
+query_split_tests.test_split_query__broken_input (tests/unittests/tests-uri_parser/tests-uri_parser.c 595) exp -1 was 1
+..
+run 10 failures 1
+
+native: exiting
+
+--- stderr ---
+==336==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffeb1aca000; bottom 0x000000436000; size: 0x7ffeb1694000 (140731874885632)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

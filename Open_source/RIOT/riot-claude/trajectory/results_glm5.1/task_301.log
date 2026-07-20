@@ -1,0 +1,87 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implemented `timex_sub` as the inverse of `timex_add`:
+
+- Debug normalization check, matching the pattern in `timex_add` and `timex_cmp`
+- Subtracts seconds and microseconds separately
+- When `a.microseconds < b.microseconds`, borrows 1 second and adds `US_PER_SEC` (1,000,000) to the microseconds result
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/timex/timex.c
++++ sys/timex/timex.c
+@@ -63,7 +63,22 @@
+ 
+ timex_t timex_sub(const timex_t a, const timex_t b)
+ {
+-    /* MASKED - implement this function */
++    if (IS_ACTIVE(ENABLE_DEBUG)) {
++        if (!timex_isnormalized(&a) || !timex_isnormalized(&b)) {
++            puts("timex_sub on denormalized value");
++        }
++    }
++
++    timex_t result;
++    result.seconds = a.seconds - b.seconds;
++    result.microseconds = a.microseconds - b.microseconds;
++
++    if (a.microseconds < b.microseconds) {
++        result.seconds--;
++        result.microseconds += US_PER_SEC;
++    }
++
++    return result;
+ }
+ 
+ int timex_cmp(const timex_t a, const timex_t b)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-timex
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/timex
+   text	   data	    bss	    dec	    hex	filename
+  80647	  32008	  78120	 190775	  2e937	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....
+OK (5 tests)
+
+native: exiting
+
+--- stderr ---
+==335==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffdfaa9a000; bottom 0x00000042e000; size: 0x7ffdfa66c000 (140728804491264)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

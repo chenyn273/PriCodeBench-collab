@@ -1,0 +1,93 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation follows the same pattern as `coap_opt_get_opaque` but adds uint-specific logic:
+
+1. **Find the option** using `coap_find_option` — returns `-ENOENT` if not found
+2. **Parse the option** using `_parse_option` to get the value pointer and length — returns `-EBADMSG` if parsing fails
+3. **Check length** — returns `-ENOSPC` if the option value exceeds 4 octets (as documented in the header)
+4. **Decode** the network-byte-order bytes into a `uint32_t` using the existing `_decode_uint` helper
+
+This matches the documented return values in `nanocoap.h:984-988` and is symmetric with `coap_opt_add_uint` / `coap_opt_put_uint` which use `_encode_uint`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/application_layer/nanocoap/nanocoap.c
++++ sys/net/application_layer/nanocoap/nanocoap.c
+@@ -265,7 +265,25 @@
+ 
+ int coap_opt_get_uint(coap_pkt_t *pkt, uint16_t opt_num, uint32_t *target)
+ {
+-    /* MASKED - implement this function */
++    uint8_t *start = coap_find_option(pkt, opt_num);
++    if (!start) {
++        return -ENOENT;
++    }
++
++    uint16_t delta;
++    int len;
++
++    uint8_t *value = _parse_option(pkt, start, &delta, &len);
++    if (!value) {
++        return -EBADMSG;
++    }
++
++    if ((unsigned)len > 4) {
++        return -ENOSPC;
++    }
++
++    *target = _decode_uint(value, len);
++    return 0;
+ }
+ 
+ uint8_t *coap_iterate_option(coap_pkt_t *pkt, unsigned optnum,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-nanocoap
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/application_layer/nanocoap
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 147719	  36040	  78120	 261879	  3fef7	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....................................
+OK (37 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc0bf6b000; bottom 0x00000043f000; size: 0x7ffc0bb2c000 (140720504750080)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

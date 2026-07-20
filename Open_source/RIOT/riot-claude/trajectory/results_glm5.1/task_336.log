@@ -1,0 +1,81 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. The `ucrc16_calc_le` function is the little-endian mirror of `ucrc16_calc_be`:
+
+- **BE version**: XORs the byte into the *high* 8 bits of the seed (`<< 8`), shifts left, checks the *leftmost* bit, and XORs with poly when set.
+- **LE version**: XORs the byte into the *low* 8 bits of the seed (directly), shifts right, checks the *rightmost* bit, and XORs with poly when set.
+
+This is the standard reflection for little-endian CRC16 computation.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/checksum/ucrc16.c
++++ sys/checksum/ucrc16.c
+@@ -40,7 +40,15 @@
+ uint16_t ucrc16_calc_le(const uint8_t *buf, size_t len, uint16_t poly,
+                         uint16_t seed)
+ {
+-    /* MASKED - implement this function */
++    assert(buf != NULL);
++    for (unsigned c = 0; c < len; c++, buf++) {
++        uint32_t tmp = seed ^ *buf;
++        for (unsigned i = 0; i < UINT8_BIT_SIZE; i++) {
++            tmp = RIGHTMOST_BIT_SET(tmp) ? ((tmp >> 1) ^ poly) : (tmp >> 1);
++        }
++        seed = tmp & UINT16_MAX;
++    }
++    return seed;
+ }
+ 
+ /** @} */
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-checksum
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/checksum
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 123105	  42464	  78120	 243689	  3b7e9	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..........................................................
+OK (58 tests)
+
+native: exiting
+
+--- stderr ---
+==377==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffe7d9c9000; bottom 0x00000043a000; size: 0x7ffe7d58f000 (140731001401344)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

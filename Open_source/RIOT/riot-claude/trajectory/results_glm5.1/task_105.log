@@ -1,0 +1,110 @@
+============================================================
+=== Claude Session ===
+============================================================
+Done. Here's what the implementation does:
+
+1. **Locks the mutex** for thread-safe access to the table
+2. **Validates parameters** — returns `-EFAULT` if `fib_sr` is NULL or `sr_lifetime` is 0 (matching the header's documented error codes)
+3. **Searches for a free slot** in the source route headers array (identified by `sr_lifetime == 0`)
+4. **Initializes the new source route** — sets the interface ID, flags, and clears path/dest pointers to NULL (no hops yet)
+5. **Converts the lifetime** from relative ms to absolute microseconds using `fib_lifetime_to_absolute`, or sets `FIB_LIFETIME_NO_EXPIRE` if the lifetime is the no-expire sentinel value
+6. **Sets the output pointer** to the newly created header
+7. **Returns** `-ENOBUFS` if no free slot is available
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -676,7 +676,36 @@
+ int fib_sr_create(fib_table_t *table, fib_sr_t **fib_sr, kernel_pid_t sr_iface_id,
+                   uint32_t sr_flags, uint32_t sr_lifetime)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&(table->mtx_access));
++
++    if ((fib_sr == NULL) || (sr_lifetime == 0)) {
++        mutex_unlock(&(table->mtx_access));
++        return -EFAULT;
++    }
++
++    for (size_t i = 0; i < table->size; ++i) {
++        if (table->data.source_routes->headers[i].sr_lifetime == 0) {
++            table->data.source_routes->headers[i].sr_iface_id = sr_iface_id;
++            table->data.source_routes->headers[i].sr_flags = sr_flags;
++            table->data.source_routes->headers[i].sr_path = NULL;
++            table->data.source_routes->headers[i].sr_dest = NULL;
++
++            if (sr_lifetime != (uint32_t)FIB_LIFETIME_NO_EXPIRE) {
++                fib_lifetime_to_absolute(sr_lifetime,
++                                         &(table->data.source_routes->headers[i].sr_lifetime));
++            }
++            else {
++                table->data.source_routes->headers[i].sr_lifetime = FIB_LIFETIME_NO_EXPIRE;
++            }
++
++            *fib_sr = &(table->data.source_routes->headers[i]);
++            mutex_unlock(&(table->mtx_access));
++            return 0;
++        }
++    }
++
++    mutex_unlock(&(table->mtx_access));
++    return -ENOBUFS;
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-fib_sr
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/div
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 127000	  36808	  86856	 250664	  3d328	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+............
+OK (12 tests)
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd53634000; bottom 0x000000439000; size: 0x7ffd531fb000 (140725998039040)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

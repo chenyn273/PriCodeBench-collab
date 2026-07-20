@@ -1,0 +1,90 @@
+============================================================
+=== Claude Session ===
+============================================================
+Done. The implementation:
+
+- Returns `NULL` if the queue pointer is `NULL` or if the queue is empty (`first` is `NULL`)
+- Otherwise returns the `data` field of the first node cast to `gnrc_pktsnip_t *`, matching the same pattern used in `gnrc_priority_pktqueue_pop` (which casts `head->data` to recover the packet pointer)
+
+This is the non-destructive counterpart to `pop` — it peeks at the head without removing or freeing the node.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/gnrc/priority_pktqueue/priority_pktqueue.c
++++ sys/net/gnrc/priority_pktqueue/priority_pktqueue.c
+@@ -50,7 +50,10 @@
+ 
+ gnrc_pktsnip_t *gnrc_priority_pktqueue_head(gnrc_priority_pktqueue_t *queue)
+ {
+-    /* MASKED - implement this function */
++    if (!queue || !queue->first) {
++        return NULL;
++    }
++    return (gnrc_pktsnip_t *)queue->first->data;
+ }
+ /******************************************************************************/
+ 
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-priority_pktqueue
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/event
+"make" -C /workspace/sys/fmt
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/gnrc
+"make" -C /workspace/sys/net/link_layer/l2util
+"make" -C /workspace/sys/net/netif
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/net/gnrc/netapi
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/net/gnrc/netif
+"make" -C /workspace/sys/net/gnrc/netreg
+"make" -C /workspace/sys/net/gnrc/pkt
+"make" -C /workspace/sys/net/gnrc/pktbuf
+"make" -C /workspace/sys/net/gnrc/pktbuf_static
+"make" -C /workspace/sys/net/gnrc/priority_pktqueue
+"make" -C /workspace/sys/net/gnrc/netif/hdr
+   text	   data	    bss	    dec	    hex	filename
+ 119812	  37328	  85352	 242492	  3b33c	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.........
+OK (9 tests)
+
+native: exiting
+
+--- stderr ---
+==466==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd079c8000; bottom 0x000000439000; size: 0x7ffd0758f000 (140724726722560)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

@@ -1,0 +1,72 @@
+============================================================
+=== Claude Session ===
+============================================================
+Done. `ipv4_addr_from_str` is implemented as a thin wrapper around `ipv4_addr_from_buf`: it checks for a NULL `addr` pointer, then delegates to `ipv4_addr_from_buf` with `strlen(addr)` as the length. The existing `ipv4_addr_from_buf` already handles all the parsing, validation (NULL result, zero length, max length, octet range, format), and byte construction.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/ipv4/addr/ipv4_addr_from_str.c
++++ sys/net/network_layer/ipv4/addr/ipv4_addr_from_str.c
+@@ -81,7 +81,11 @@
+ 
+ ipv4_addr_t *ipv4_addr_from_str(ipv4_addr_t *result, const char *addr)
+ {
+-    /* MASKED - implement this function */
++    if (addr == NULL) {
++        return NULL;
++    }
++
++    return ipv4_addr_from_buf(result, addr, strlen(addr));
+ }
+ 
+ /** @} */
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ipv4_addr
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/ipv4/addr
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  89004	  34264	  78120	 201388	  312ac	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+...................
+OK (19 tests)
+
+native: exiting
+
+--- stderr ---
+==335==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff7aa39000; bottom 0x000000431000; size: 0x7fff7a608000 (140735246532608)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

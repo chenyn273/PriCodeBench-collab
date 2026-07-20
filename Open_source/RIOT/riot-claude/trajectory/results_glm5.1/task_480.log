@@ -1,0 +1,88 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `crb_add_byte` does:
+
+1. **Compute the next write position** (`next`): advance `cur` by one, wrapping around to `buffer` if we pass `buffer_end`
+2. **Check if the buffer is full**: if `next` would equal `protect` (the start of the first valid/unconsumed chunk), then writing this byte would overwrite protected data — return `false`
+3. **Write the byte** at the current `cur` position
+4. **Advance `cur`** to `next`
+5. **Return `true`** on success
+
+This matches the ringbuffer convention used throughout the codebase: `cur == protect` means full (as seen in `crb_start_chunk`), and `buffer_end` is the last valid byte (wrapping uses `> buffer_end` as the boundary, consistent with `_get_cur_len`, `crb_peek_bytes`, and `crb_consume_chunk`).
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/chunked_ringbuffer.h
++++ sys/include/chunked_ringbuffer.h
+@@ -136,7 +136,19 @@
+  */
+ static inline bool crb_add_byte(chunk_ringbuf_t *rb, uint8_t b)
+ {
+-    /* MASKED - implement this function */
++    uint8_t *next = rb->cur + 1;
++    if (next > rb->buffer_end) {
++        next = rb->buffer;
++    }
++
++    if (next == rb->protect) {
++        return false;
++    }
++
++    *rb->cur = b;
++    rb->cur = next;
++
++    return true;
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-chunked_ringbuffer
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/chunked_ringbuffer
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  83882	  32600	  78120	 194602	  2f82a	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..
+OK (2 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd6b65e000; bottom 0x00000042e000; size: 0x7ffd6b230000 (140726400909312)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

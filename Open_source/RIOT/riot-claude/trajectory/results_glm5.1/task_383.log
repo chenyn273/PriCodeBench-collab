@@ -1,0 +1,73 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation disables IRQs, calls the existing `_is_set` helper, restores IRQs, and returns the result. This matches the pattern used throughout the file (e.g., `ztimer_remove`, `ztimer_set`) where list access is IRQ-protected, since `_is_set` reads `clock->list.next` and `clock->last` which can be modified by the timer handler in interrupt context.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/ztimer/core.c
++++ sys/ztimer/core.c
+@@ -124,7 +124,10 @@
+ 
+ unsigned ztimer_is_set(const ztimer_clock_t *clock, const ztimer_t *timer)
+ {
+-    /* MASKED - implement this function */
++    unsigned state = irq_disable();
++    unsigned result = _is_set(clock, timer);
++    irq_restore(state);
++    return result;
+ }
+ 
+ bool ztimer_remove(ztimer_clock_t *clock, ztimer_t *timer)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ztimer
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+   text	   data	    bss	    dec	    hex	filename
+ 110651	  34200	  78120	 222971	  366fb	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+................
+OK (16 tests)
+
+native: exiting
+
+--- stderr ---
+==363==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc3fd70000; bottom 0x000000436000; size: 0x7ffc3f93a000 (140721375125504)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+==363==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+
+
+

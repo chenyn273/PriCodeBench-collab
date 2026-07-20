@@ -1,0 +1,148 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's a summary of what `fib_sr_entry_add` does:
+
+1. **Acquires the mutex** and validates inputs (`fib_sr`, `sr_path_entry`, `addr` must not be NULL; `fib_sr` must belong to the table)
+2. **Checks the source route lifetime** — returns `-ENOENT` if expired
+3. **Checks for duplicate addresses** — returns `-EINVAL` if the address already exists in the path
+4. **Verifies `sr_path_entry` is in the route** — returns `-EFAULT` if not found
+5. **Creates a new entry** via `fib_sr_new_entry`
+6. **Handles the remaining route** based on `keep_remaining_route`:
+   - If `true`: the new entry inherits the old `next` pointer from `sr_path_entry`, preserving the rest of the route
+   - If `false`: all entries after `sr_path_entry` are removed (addresses freed), and the new entry's `next` is NULL
+7. **Links the new entry** after `sr_path_entry`
+8. **Updates `sr_dest`** if `sr_path_entry` was the destination (the new entry becomes the new destination)
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -996,7 +996,71 @@
+                      fib_sr_entry_t *sr_path_entry, uint8_t *addr, size_t addr_size,
+                      bool keep_remaining_route)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&(table->mtx_access));
++    if ((fib_sr == NULL) || (sr_path_entry == NULL) || (addr == NULL)
++        || (fib_is_sr_in_table(table, fib_sr) == -ENOENT)) {
++        mutex_unlock(&(table->mtx_access));
++        return -EFAULT;
++    }
++
++    if (fib_sr_check_lifetime(fib_sr) == -ENOENT) {
++        mutex_unlock(&(table->mtx_access));
++        return -ENOENT;
++    }
++
++    /* check if the address is already present in the path */
++    fib_sr_entry_t *elt = NULL;
++    LL_FOREACH(fib_sr->sr_path, elt) {
++        size_t addr_size_match = addr_size << 3;
++        if (UNIVERSAL_ADDRESS_EQUAL == universal_address_compare(elt->address, addr,
++                                                                 &addr_size_match)) {
++            mutex_unlock(&(table->mtx_access));
++            return -EINVAL;
++        }
++    }
++
++    /* check that sr_path_entry is actually in this source route's path */
++    bool found = false;
++    LL_FOREACH(fib_sr->sr_path, elt) {
++        if (elt == sr_path_entry) {
++            found = true;
++            break;
++        }
++    }
++
++    if (!found) {
++        mutex_unlock(&(table->mtx_access));
++        return -EFAULT;
++    }
++
++    fib_sr_entry_t *new_entry[1];
++    int ret = fib_sr_new_entry(table, addr, addr_size, &new_entry[0]);
++
++    if (ret == 0) {
++        if (keep_remaining_route) {
++            new_entry[0]->next = sr_path_entry->next;
++        }
++        else {
++            /* remove all entries after sr_path_entry */
++            fib_sr_entry_t *elt_del = NULL, *tmp_del = NULL;
++            LL_FOREACH_SAFE(sr_path_entry->next, elt_del, tmp_del) {
++                universal_address_rem(elt_del->address);
++                elt_del->address = NULL;
++                LL_DELETE(fib_sr->sr_path, elt_del);
++            }
++            new_entry[0]->next = NULL;
++        }
++
++        sr_path_entry->next = new_entry[0];
++
++        /* if sr_path_entry was the destination, update the destination */
++        if (sr_path_entry == fib_sr->sr_dest) {
++            fib_sr->sr_dest = new_entry[0];
++        }
++    }
++
++    mutex_unlock(&(table->mtx_access));
++    return ret;
+ }
+ 
+ int fib_sr_entry_delete(fib_table_t *table, fib_sr_t *fib_sr, uint8_t *addr, size_t addr_size,
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/tests/unittests/tests-fib_sr
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/div
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 127227	  36808	  86856	 250891	  3d40b	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+............
+OK (12 tests)
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff09042000; bottom 0x000000439000; size: 0x7fff08c09000 (140733340225536)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

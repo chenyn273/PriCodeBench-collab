@@ -1,0 +1,104 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implementation looks correct. Here's what the function does:
+
+- Iterates over all URI query options in the packet using `coap_iterate_option` with `COAP_OPT_URI_QUERY`
+- For each option, checks if it has an `=` separator to distinguish `key=value` from bare `key`
+- Compares the key portion against the search key
+- On match: if there's a value part (`key=value`), sets `*value` to point after `=` and `*len` to the value length; if it's just `key` (no `=`), sets `*value` to NULL and `*len` to 0
+- Respects NULL `value`/`len` pointers per the docstring
+- Returns `true` if key found, `false` otherwise
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/application_layer/nanocoap/nanocoap.c
++++ sys/net/application_layer/nanocoap/nanocoap.c
+@@ -490,7 +490,36 @@
+ 
+ bool coap_find_uri_query(coap_pkt_t *pkt, const char *key, const char **value, size_t *len)
+ {
+-    /* MASKED - implement this function */
++    uint8_t *opt_pos = NULL;
++    int opt_len;
++    size_t key_len = strlen(key);
++
++    while (true) {
++        uint8_t *data = coap_iterate_option(pkt, COAP_OPT_URI_QUERY,
++                                            &opt_pos, &opt_len);
++        if (!data) {
++            return false;
++        }
++
++        const char *eq = memchr(data, '=', opt_len);
++        size_t cur_key_len = eq ? (size_t)(eq - (char *)data) : (size_t)opt_len;
++
++        if (cur_key_len == key_len && memcmp(data, key, key_len) == 0) {
++            if (eq && value) {
++                *value = eq + 1;
++                if (len) {
++                    *len = opt_len - cur_key_len - 1;
++                }
++            }
++            else if (value) {
++                *value = NULL;
++            }
++            if (!eq && len) {
++                *len = 0;
++            }
++            return true;
++        }
++    }
+ }
+ 
+ bool coap_has_unprocessed_critical_options(const coap_pkt_t *pkt)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-nanocoap
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/application_layer/nanocoap
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+ 147739	  36040	  78120	 261899	  3ff0b	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....................................
+OK (37 tests)
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd1aae7000; bottom 0x00000043f000; size: 0x7ffd1a6a8000 (140725046640640)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

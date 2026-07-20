@@ -1,0 +1,95 @@
+============================================================
+=== Claude Session ===
+============================================================
+The function is implemented. Here's what it does:
+
+1. **Validates the string length** — must be exactly 36 characters (`UUID_STR_LEN`)
+2. **Validates dash positions** — dashes must be at positions 8, 13, 18, and 23
+3. **Parses each field** from hex back into the `uuid_t` struct in network byte order:
+   - `time_low` (8 hex digits) → `scn_u32_hex` + `byteorder_htonl`
+   - `time_mid` (4 hex digits) → `scn_u32_hex` + `byteorder_htons`
+   - `time_hi` (4 hex digits) → `scn_u32_hex` + `byteorder_htons`
+   - `clk_seq_hi_res` (2 hex digits) → `fmt_hex_byte`
+   - `clk_seq_low` (2 hex digits) → `fmt_hex_byte`
+   - `node` (12 hex digits) → `fmt_hex_bytes`
+4. **Returns 0** on success, **-1** on invalid format (as documented in the header)
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/uuid/uuid.c
++++ sys/uuid/uuid.c
+@@ -131,5 +131,17 @@
+ 
+ int uuid_from_string(uuid_t *uuid, const char *str)
+ {
+-    /* MASKED - implement this function */
++    if (fmt_strnlen(str, UUID_STR_LEN) != UUID_STR_LEN) {
++        return -1;
++    }
++    if (str[8] != '-' || str[13] != '-' || str[18] != '-' || str[23] != '-') {
++        return -1;
++    }
++    uuid->time_low = byteorder_htonl(scn_u32_hex(str, 8));
++    uuid->time_mid = byteorder_htons(scn_u32_hex(str + 9, 4));
++    uuid->time_hi = byteorder_htons(scn_u32_hex(str + 14, 4));
++    uuid->clk_seq_hi_res = fmt_hex_byte(str + 19);
++    uuid->clk_seq_low = fmt_hex_byte(str + 21);
++    fmt_hex_bytes(uuid->node, str + 24);
++    return 0;
+ }
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-uuid
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/crypto
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/fmt
+"make" -C /workspace/sys/hashes
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/luid
+"make" -C /workspace/sys/random
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/uuid
+   text	   data	    bss	    dec	    hex	filename
+ 122381	  35712	  78768	 236861	  39d3d	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+....
+OK (4 tests)
+
+native: exiting
+
+--- stderr ---
+/bin/sh: 1: hexdump: not found
+==443==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc7b7fa000; bottom 0x000000438000; size: 0x7ffc7b3c2000 (140722376024064)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

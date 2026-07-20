@@ -1,0 +1,73 @@
+============================================================
+=== Claude Session ===
+============================================================
+Implemented `gnrc_pktqueue_add` following the same pattern as `gnrc_pktqueue_remove`:
+
+- Guards against a NULL `node` (matching the null-check pattern in `gnrc_pktqueue_remove`)
+- Uses `LL_APPEND` from `utlist.h` to add the node to the tail of the queue (FIFO ordering, appropriate for a queue)
+- Sets `node->next` implicitly through `LL_APPEND` (unlike remove, append always sets the new tail's `next` to NULL, so no explicit reset needed)
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/gnrc/pktqueue.h
++++ sys/include/net/gnrc/pktqueue.h
+@@ -46,7 +46,9 @@
+  */
+ static inline void gnrc_pktqueue_add(gnrc_pktqueue_t **queue, gnrc_pktqueue_t *node)
+ {
+-    /* MASKED - implement this function */
++    if (node) {
++        LL_APPEND(*queue, node);
++    }
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-pktqueue
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+  84473	  32232	  78208	 194913	  2f961	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.....
+OK (5 tests)
+
+native: exiting
+
+--- stderr ---
+==322==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffcbdd0c000; bottom 0x00000042e000; size: 0x7ffcbd8de000 (140723488677888)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

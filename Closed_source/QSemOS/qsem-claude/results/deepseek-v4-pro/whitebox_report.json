@@ -52,7 +52,8 @@
       "claude_chars": 362,
       "oracle_chars": 144,
       "ratio": 2.513888888888889
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "6",
@@ -114,7 +115,8 @@
       "claude_chars": 346,
       "oracle_chars": 821,
       "ratio": 0.42143727161997563
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "7",
@@ -171,7 +173,8 @@
       "claude_chars": 317,
       "oracle_chars": 91,
       "ratio": 3.4835164835164836
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "12",
@@ -225,7 +228,8 @@
       "claude_chars": 333,
       "oracle_chars": 284,
       "ratio": 1.1725352112676057
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "22",
@@ -296,7 +300,8 @@
       "claude_chars": 551,
       "oracle_chars": 648,
       "ratio": 0.8503086419753086
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "35",
@@ -348,7 +353,8 @@
       "claude_chars": 200,
       "oracle_chars": 211,
       "ratio": 0.9478672985781991
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "38",
@@ -397,7 +403,8 @@
       "claude_chars": 168,
       "oracle_chars": 161,
       "ratio": 1.0434782608695652
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "66",
@@ -463,7 +470,8 @@
       "claude_chars": 276,
       "oracle_chars": 642,
       "ratio": 0.42990654205607476
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "67",
@@ -474,7 +482,7 @@
     "is_false_failure": false,
     "classification": {
       "L1": "crash",
-      "L2": "missing_synchronization",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
         "missing_lock_calls: OsIntLock, OsIntRestore"
       ],
@@ -519,57 +527,8 @@
       "claude_chars": 160,
       "oracle_chars": 435,
       "ratio": 0.367816091954023
-    }
-  },
-  {
-    "task_id": "75",
-    "sut_function": "OsAddSignalPendingFlag",
-    "source_path": "src/core/ipc/signal/prt_signal.c",
-    "module": "ipc/signal",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
     },
-    "body_sizes": {
-      "claude_chars": 965,
-      "oracle_chars": 869,
-      "ratio": 1.1104718066743384
-    }
-  },
-  {
-    "task_id": "76",
-    "sut_function": "OsHandleOneSignal",
-    "source_path": "src/core/ipc/signal/prt_signal.c",
-    "module": "ipc/signal",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 602,
-      "oracle_chars": 593,
-      "ratio": 1.015177065767285
-    }
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "77",
@@ -641,57 +600,8 @@
       "claude_chars": 496,
       "oracle_chars": 958,
       "ratio": 0.5177453027139874
-    }
-  },
-  {
-    "task_id": "78",
-    "sut_function": "OsInitSigVectors",
-    "source_path": "src/core/ipc/signal/prt_signal.c",
-    "module": "ipc/signal",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
     },
-    "body_sizes": {
-      "claude_chars": 230,
-      "oracle_chars": 119,
-      "ratio": 1.9327731092436975
-    }
-  },
-  {
-    "task_id": "79",
-    "sut_function": "OsSigDefaultHandler",
-    "source_path": "src/core/ipc/signal/prt_signal.c",
-    "module": "ipc/signal",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 154,
-      "oracle_chars": 34,
-      "ratio": 4.529411764705882
-    }
+    "mechanism": "hallucination"
   },
   {
     "task_id": "80",
@@ -702,7 +612,7 @@
     "is_false_failure": false,
     "classification": {
       "L1": "test_failure",
-      "L2": "wrong_error_handling",
+      "L2": "logic_deviation",
       "L3_detail": [
         "MANUAL: Claude returns OS_ERRNO_SIGNAL_PARA_INVALID when no signal matches (oracle returns OS_OK).",
         "MANUAL: premature_return inside loop skips sigWaitMask=0 cleanup.",
@@ -749,32 +659,8 @@
       "oracle_chars": 581,
       "ratio": 1.1428571428571428
     },
-    "manual_override": true
-  },
-  {
-    "task_id": "81",
-    "sut_function": "OsSignalEntry",
-    "source_path": "src/core/ipc/signal/prt_signal.c",
-    "module": "ipc/signal",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 462,
-      "oracle_chars": 370,
-      "ratio": 1.2486486486486486
-    }
+    "manual_override": true,
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "82",
@@ -785,7 +671,7 @@
     "is_false_failure": false,
     "classification": {
       "L1": "crash",
-      "L2": "data_structure_misuse",
+      "L2": "logic_deviation",
       "L3_detail": [
         "missing_list_queue_ops: TSK_STATUS_CLEAR",
         "task_status_op_mismatch: oracle=['TSK_STATUS_CLEAR', 'TSK_STATUS_SET'], claude=['TSK_STATUS_SET']"
@@ -826,107 +712,8 @@
       "claude_chars": 271,
       "oracle_chars": 211,
       "ratio": 1.2843601895734598
-    }
-  },
-  {
-    "task_id": "83",
-    "sut_function": "OsSignalWaitReSche",
-    "source_path": "src/core/ipc/signal/prt_signal.c",
-    "module": "ipc/signal",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
     },
-    "body_sizes": {
-      "claude_chars": 381,
-      "oracle_chars": 301,
-      "ratio": 1.26578073089701
-    }
-  },
-  {
-    "task_id": "84",
-    "sut_function": "OsSignalWaitSche",
-    "source_path": "src/core/ipc/signal/prt_signal.c",
-    "module": "ipc/signal",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 699,
-      "oracle_chars": 594,
-      "ratio": 1.1767676767676767
-    }
-  },
-  {
-    "task_id": "85",
-    "sut_function": "PRT_SigSuspend",
-    "source_path": "src/core/ipc/signal/prt_signal.c",
-    "module": "ipc/signal",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 1205,
-      "oracle_chars": 1050,
-      "ratio": 1.1476190476190475
-    }
-  },
-  {
-    "task_id": "87",
-    "sut_function": "PRT_SignalDeliver",
-    "source_path": "src/core/ipc/signal/prt_signal.c",
-    "module": "ipc/signal",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 2726,
-      "oracle_chars": 2600,
-      "ratio": 1.0484615384615386
-    }
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "88",
@@ -937,7 +724,7 @@
     "is_false_failure": false,
     "classification": {
       "L1": "test_failure",
-      "L2": "wrong_error_handling",
+      "L2": "logic_deviation",
       "L3_detail": [
         "MANUAL: Claude returns OS_ERRNO_SIGNAL_PARA_INVALID for invalid \"how\" in default case.",
         "MANUAL: Oracle returns OS_OK for all cases (default does nothing).",
@@ -984,32 +771,8 @@
       "oracle_chars": 737,
       "ratio": 1.322930800542741
     },
-    "manual_override": true
-  },
-  {
-    "task_id": "89",
-    "sut_function": "PRT_SignalWait",
-    "source_path": "src/core/ipc/signal/prt_signal.c",
-    "module": "ipc/signal",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 1111,
-      "oracle_chars": 1045,
-      "ratio": 1.063157894736842
-    }
+    "manual_override": true,
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "92",
@@ -1060,7 +823,8 @@
       "claude_chars": 676,
       "oracle_chars": 459,
       "ratio": 1.4727668845315904
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "94",
@@ -1119,7 +883,8 @@
       "claude_chars": 556,
       "oracle_chars": 380,
       "ratio": 1.4631578947368422
-    }
+    },
+    "mechanism": "hallucination"
   },
   {
     "task_id": "104",
@@ -1130,7 +895,7 @@
     "is_false_failure": false,
     "classification": {
       "L1": "crash",
-      "L2": "hallucinated_api_and_wrong_architecture",
+      "L2": "hallucinated_api",
       "L3_detail": [
         "MANUAL: Claude hallucinated OsHwiFuncGet() and OsHwiParaGet() — do not exist.",
         "MANUAL: Oracle uses OsHwiHandleActive(irqNum) for standard IRQ dispatch.",
@@ -1173,7 +938,8 @@
       "oracle_chars": 275,
       "ratio": 1.5963636363636364
     },
-    "manual_override": true
+    "manual_override": true,
+    "mechanism": "hallucination"
   },
   {
     "task_id": "120",
@@ -1239,7 +1005,8 @@
       "claude_chars": 704,
       "oracle_chars": 695,
       "ratio": 1.0129496402877698
-    }
+    },
+    "mechanism": "hallucination"
   },
   {
     "task_id": "123",
@@ -1286,182 +1053,8 @@
       "claude_chars": 295,
       "oracle_chars": 168,
       "ratio": 1.755952380952381
-    }
-  },
-  {
-    "task_id": "124",
-    "sut_function": "OsPowerOffFuncHook",
-    "source_path": "src/core/kernel/task/smp/prt_task.c",
-    "module": "kernel/task",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
     },
-    "body_sizes": {
-      "claude_chars": 162,
-      "oracle_chars": 39,
-      "ratio": 4.153846153846154
-    }
-  },
-  {
-    "task_id": "125",
-    "sut_function": "OsPowerOffSetFlag",
-    "source_path": "src/core/kernel/task/smp/prt_task.c",
-    "module": "kernel/task",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 154,
-      "oracle_chars": 31,
-      "ratio": 4.967741935483871
-    }
-  },
-  {
-    "task_id": "126",
-    "sut_function": "OsSetOfflineFlagHook",
-    "source_path": "src/core/kernel/task/smp/prt_task.c",
-    "module": "kernel/task",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 171,
-      "oracle_chars": 48,
-      "ratio": 3.5625
-    }
-  },
-  {
-    "task_id": "127",
-    "sut_function": "OsTskIdleBgd",
-    "source_path": "src/core/kernel/task/smp/prt_task.c",
-    "module": "kernel/task",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 171,
-      "oracle_chars": 104,
-      "ratio": 1.6442307692307692
-    }
-  },
-  {
-    "task_id": "129",
-    "sut_function": "OsTskReadyAddNoWakeUpIpc",
-    "source_path": "src/core/kernel/task/smp/prt_task.c",
-    "module": "kernel/task",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 201,
-      "oracle_chars": 76,
-      "ratio": 2.6447368421052633
-    }
-  },
-  {
-    "task_id": "130",
-    "sut_function": "OsTskReadyAddOnly",
-    "source_path": "src/core/kernel/task/smp/prt_task.c",
-    "module": "kernel/task",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 408,
-      "oracle_chars": 297,
-      "ratio": 1.3737373737373737
-    }
-  },
-  {
-    "task_id": "131",
-    "sut_function": "OsTskReadyDel",
-    "source_path": "src/core/kernel/task/smp/prt_task.c",
-    "module": "kernel/task",
-    "actual_pass": true,
-    "is_false_failure": true,
-    "classification": {
-      "L1": "false_failure_detection",
-      "L2": "harness_bug_crash_regex",
-      "L3_detail": [
-        "Test actually PASSED but framework classified as crash. Reason: crash regex. Implementation is correct."
-      ],
-      "call_diff": {},
-      "field_diff": {},
-      "macro_diff": {},
-      "claude_control": {},
-      "oracle_control": {}
-    },
-    "body_sizes": {
-      "claude_chars": 441,
-      "oracle_chars": 330,
-      "ratio": 1.3363636363636364
-    }
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "132",
@@ -1516,53 +1109,8 @@
       "claude_chars": 954,
       "oracle_chars": 831,
       "ratio": 1.148014440433213
-    }
-  },
-  {
-    "task_id": "133",
-    "sut_function": "OsPerfGetEventName",
-    "source_path": "src/extended/perf/pmu/prt_perf_timed_pmu.c",
-    "module": "perf/pmu",
-    "actual_pass": false,
-    "is_false_failure": false,
-    "classification": {
-      "L1": "test_failure",
-      "L2": "semantic_drift",
-      "L3_detail": [
-        "semantic_drift: call jaccard=1.00, structurally similar but behavior differs"
-      ],
-      "call_diff": {
-        "only_claude": [],
-        "only_oracle": [],
-        "shared": [],
-        "claude_count": 0,
-        "oracle_count": 0,
-        "jaccard": 1.0
-      },
-      "field_diff": {
-        "only_claude": [],
-        "only_oracle": [],
-        "jaccard": 1.0
-      },
-      "macro_diff": {
-        "only_claude": [],
-        "only_oracle": []
-      },
-      "claude_control": {
-        "return_statement": 2,
-        "if_statement": 1
-      },
-      "oracle_control": {
-        "if_statement": 1,
-        "else_clause": 1,
-        "return_statement": 2
-      }
     },
-    "body_sizes": {
-      "claude_chars": 230,
-      "oracle_chars": 120,
-      "ratio": 1.9166666666666667
-    }
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "135",
@@ -1625,7 +1173,8 @@
       "claude_chars": 935,
       "oracle_chars": 1007,
       "ratio": 0.9285004965243296
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "137",
@@ -1688,7 +1237,8 @@
       "claude_chars": 389,
       "oracle_chars": 559,
       "ratio": 0.6958855098389982
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "138",
@@ -1742,7 +1292,8 @@
       "claude_chars": 281,
       "oracle_chars": 266,
       "ratio": 1.056390977443609
-    }
+    },
+    "mechanism": "hallucination"
   },
   {
     "task_id": "141",
@@ -1753,7 +1304,7 @@
     "is_false_failure": false,
     "classification": {
       "L1": "crash",
-      "L2": "data_structure_misuse",
+      "L2": "logic_deviation",
       "L3_detail": [
         "missing_list_queue_ops: TSK_STATUS_SET",
         "extra_field_accesses: taskStatus",
@@ -1798,7 +1349,8 @@
       "claude_chars": 255,
       "oracle_chars": 277,
       "ratio": 0.9205776173285198
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "151",
@@ -1846,7 +1398,8 @@
       "claude_chars": 144,
       "oracle_chars": 109,
       "ratio": 1.3211009174311927
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "152",
@@ -1857,7 +1410,7 @@
     "is_false_failure": false,
     "classification": {
       "L1": "crash",
-      "L2": "missing_synchronization",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
         "missing_lock_calls: OsSplLockInit",
         "missing_null_checks: 1 null-check(s) in oracle not in Claude (1 vs 0)",
@@ -1902,7 +1455,8 @@
       "claude_chars": 186,
       "oracle_chars": 118,
       "ratio": 1.576271186440678
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "153",
@@ -1949,7 +1503,8 @@
       "claude_chars": 144,
       "oracle_chars": 113,
       "ratio": 1.2743362831858407
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "162",
@@ -2001,7 +1556,8 @@
       "claude_chars": 247,
       "oracle_chars": 173,
       "ratio": 1.4277456647398843
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "165",
@@ -2082,7 +1638,8 @@
       "claude_chars": 1462,
       "oracle_chars": 1761,
       "ratio": 0.8302101078932425
-    }
+    },
+    "mechanism": "hallucination"
   },
   {
     "task_id": "170",
@@ -2140,7 +1697,8 @@
       "claude_chars": 219,
       "oracle_chars": 307,
       "ratio": 0.7133550488599348
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "175",
@@ -2205,7 +1763,8 @@
       "claude_chars": 1713,
       "oracle_chars": 1711,
       "ratio": 1.0011689070718879
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "183",
@@ -2261,7 +1820,8 @@
       "claude_chars": 419,
       "oracle_chars": 452,
       "ratio": 0.9269911504424779
-    }
+    },
+    "mechanism": "hallucination"
   },
   {
     "task_id": "193",
@@ -2336,7 +1896,8 @@
       "claude_chars": 1135,
       "oracle_chars": 442,
       "ratio": 2.567873303167421
-    }
+    },
+    "mechanism": "hallucination"
   },
   {
     "task_id": "197",
@@ -2347,7 +1908,7 @@
     "is_false_failure": false,
     "classification": {
       "L1": "crash",
-      "L2": "missing_null_check",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
         "missing_null_checks: 2 null-check(s) in oracle not in Claude (2 vs 0)",
         "missing_if_statements: oracle has 2, Claude has 0 (Δ=2)"
@@ -2385,7 +1946,8 @@
       "claude_chars": 201,
       "oracle_chars": 205,
       "ratio": 0.9804878048780488
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "202",
@@ -2447,7 +2009,8 @@
       "claude_chars": 1127,
       "oracle_chars": 1448,
       "ratio": 0.7783149171270718
-    }
+    },
+    "mechanism": "hallucination"
   },
   {
     "task_id": "208",
@@ -2498,7 +2061,8 @@
       "claude_chars": 507,
       "oracle_chars": 408,
       "ratio": 1.2426470588235294
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "215",
@@ -2574,7 +2138,8 @@
       "claude_chars": 170,
       "oracle_chars": 663,
       "ratio": 0.2564102564102564
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "218",
@@ -2648,7 +2213,8 @@
       "claude_chars": 952,
       "oracle_chars": 949,
       "ratio": 1.0031612223393045
-    }
+    },
+    "mechanism": "misunderstanding"
   },
   {
     "task_id": "227",
@@ -2699,7 +2265,8 @@
       "claude_chars": 573,
       "oracle_chars": 328,
       "ratio": 1.7469512195121952
-    }
+    },
+    "mechanism": "hallucination"
   },
   {
     "task_id": "236",
@@ -2752,7 +2319,8 @@
       "claude_chars": 605,
       "oracle_chars": 614,
       "ratio": 0.9853420195439739
-    }
+    },
+    "mechanism": "hallucination"
   },
   {
     "task_id": "240",
@@ -2803,6 +2371,7 @@
       "claude_chars": 192,
       "oracle_chars": 154,
       "ratio": 1.2467532467532467
-    }
+    },
+    "mechanism": "misunderstanding"
   }
 ]

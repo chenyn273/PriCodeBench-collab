@@ -1,0 +1,97 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation counts used entries by checking which slots have a non-zero lifetime, consistent with how the rest of the codebase identifies active entries:
+
+- **`FIB_TABLE_TYPE_SH`** (standard hop): counts entries where `lifetime != 0` — matching `fib_create_entry` (which finds free slots by `lifetime == 0`) and `fib_print_routes` (which iterates only over entries with `lifetime != 0`)
+- **`FIB_TABLE_TYPE_SR`** (source route): counts headers where `sr_lifetime != 0` — matching the same pattern used in `fib_sr_create`, `_fib_create_sr_from_partial`, and `fib_print_routes`
+
+The mutex is acquired/released matching the convention of all other public FIB functions.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/network_layer/fib/fib.c
++++ sys/net/network_layer/fib/fib.c
+@@ -661,7 +661,26 @@
+ 
+ int fib_get_num_used_entries(fib_table_t *table)
+ {
+-    /* MASKED - implement this function */
++    mutex_lock(&(table->mtx_access));
++    int count = 0;
++
++    if (table->table_type == FIB_TABLE_TYPE_SR) {
++        for (size_t i = 0; i < table->size; ++i) {
++            if (table->data.source_routes->headers[i].sr_lifetime != 0) {
++                count++;
++            }
++        }
++    }
++    else {
++        for (size_t i = 0; i < table->size; ++i) {
++            if (table->data.entries[i].lifetime != 0) {
++                count++;
++            }
++        }
++    }
++
++    mutex_unlock(&(table->mtx_access));
++    return count;
+ }
+ 
+ /* source route handling */
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-fib
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/div
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/network_layer/fib
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/universal_address
+"make" -C /workspace/sys/ztimer
+"make" -C /workspace/sys/ztimer64
+   text	   data	    bss	    dec	    hex	filename
+ 128226	  37800	  80456	 246482	  3c2d2	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+....................
+OK (20 tests)
+
+native: exiting
+
+--- stderr ---
+==397==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff6b58d000; bottom 0x00000043b000; size: 0x7fff6b152000 (140734989934592)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

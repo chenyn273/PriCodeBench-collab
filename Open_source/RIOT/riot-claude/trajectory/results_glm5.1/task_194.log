@@ -1,0 +1,116 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's a summary of the `ieee802154_dst_filter` logic:
+
+1. **Extract destination** from the MAC header using `ieee802154_get_dst`, which returns the destination address and PAN ID. If extraction fails, the frame is rejected (return 1).
+
+2. **Check PAN ID**: The frame passes if the destination PAN ID matches the filter's PAN ID or is the broadcast PAN ID (`0xffff`). Both values are in little-endian layout (matching `le_uint16_t` from `ieee802154_get_dst`).
+
+3. **Check destination address** based on length:
+   - **Short (2 bytes)**: Passes if it matches the broadcast address (`0xffff`) or matches the filter's short address. The short address comparison converts both to host byte order for a clean numeric comparison.
+   - **Long (8 bytes)**: Passes if it matches the filter's extended address via `memcmp` against `eui64_t.uint8` (both in the same byte layout from `ieee802154_get_dst`).
+   - **No address (0 bytes)**: Passes (returns 0) — frames with no destination address aren't filtered out.
+
+Return values: **0** = frame passes filter, **1** = frame doesn't pass, per the header documentation.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/net/link_layer/ieee802154/ieee802154.c
++++ sys/net/link_layer/ieee802154/ieee802154.c
+@@ -257,7 +257,40 @@
+ int ieee802154_dst_filter(const uint8_t *mhr, uint16_t pan,
+                           network_uint16_t short_addr, const eui64_t *ext_addr)
+ {
+-    /* MASKED - implement this function */
++    uint8_t dst_addr[IEEE802154_LONG_ADDRESS_LEN];
++    le_uint16_t dst_pan;
++    int dst_len;
++    le_uint16_t pan_le = byteorder_htols(pan);
++
++    dst_len = ieee802154_get_dst(mhr, dst_addr, &dst_pan);
++    if (dst_len < 0) {
++        return 1;
++    }
++
++    /* check PAN ID: must match or be broadcast */
++    if ((dst_pan.u16 != pan_le.u16) &&
++        (dst_pan.u16 != 0xffff)) {
++        return 1;
++    }
++
++    /* check destination address */
++    switch (dst_len) {
++    case IEEE802154_SHORT_ADDRESS_LEN:
++        if (memcmp(dst_addr, ieee802154_addr_bcast, dst_len) == 0) {
++            return 0;
++        }
++        if (byteorder_lebuftohs(dst_addr) == byteorder_ntohs(short_addr)) {
++            return 0;
++        }
++        return 1;
++    case IEEE802154_LONG_ADDRESS_LEN:
++        if (memcmp(dst_addr, ext_addr->uint8, dst_len) == 0) {
++            return 0;
++        }
++        return 1;
++    default:
++        return 0;
++    }
+ }
+ 
+ /** @} */
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ieee802154
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/link_layer/ieee802154
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+ 154009	  36616	  78152	 268777	  419e9	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..........................................................
+ieee802154_tests.test_ieee802154_dst_filter_pan_short (tests/unittests/tests-ieee802154/tests-ieee802154.c 1026) exp 0 was 1
+.
+ieee802154_tests.test_ieee802154_dst_filter_bcast_short (tests/unittests/tests-ieee802154/tests-ieee802154.c 1042) exp 0 was 1
+..........
+run 69 failures 2
+
+native: exiting
+
+--- stderr ---
+==329==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffefd997000; bottom 0x000000441000; size: 0x7ffefd556000 (140733148651520)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

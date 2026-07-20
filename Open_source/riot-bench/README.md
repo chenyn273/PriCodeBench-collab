@@ -44,7 +44,7 @@ riot-claude/*.verified.jsonl  ← 最终数据集，喂给 runner.py
 | 阶段 | 产出 | 数量 |
 |---|---|---|
 | 原始 task（`build_dataset.py`） | `riot_tasks_with_commands.c.jsonl`<br>`riot_tasks_with_commands.h.jsonl` | 390 (.c) + 250 (.h) = **640** |
-| 验证后 task（`verify_tasks.py`） | `*.verified.jsonl` | 305 (.c) + 234 (.h) = **539** |
+| 验证后 task（`verify_tasks.py`） | `*.verified.jsonl` | 304 (.c) + 234 (.h) = **538** |
 
 验证过滤掉了 101 个 task（105 条被调用但未被断言 + 部分无法定位测试源文件），确保数据集中每个 task 的 `unit_test` 确实有 `TEST_ASSERT*` 验证目标函数。
 

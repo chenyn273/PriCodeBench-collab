@@ -1,0 +1,70 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation masks the upper 4 bits of the first byte of `v_tc_fl` (where the version field lives) and checks if they equal `0x60` (version 6 shifted left by 4 bits). This is consistent with how `ipv6_hdr_set_version()` sets the field to `0x60` and `ipv6_hdr_get_version()` extracts it by right-shifting by 4.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/net/ipv6/hdr.h
++++ sys/include/net/ipv6/hdr.h
+@@ -126,7 +126,7 @@
+  */
+ static inline bool ipv6_hdr_is(const ipv6_hdr_t *hdr)
+ {
+-    /* MASKED - implement this function */
++    return ((hdr->v_tc_fl.u8[0] & 0xf0) == 0x60);
+ }
+ 
+ /**
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/tests/unittests/tests-ipv6_hdr
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/net/crosslayer/inet_csum
+"make" -C /workspace/sys/net/network_layer/ipv6/addr
+"make" -C /workspace/sys/net/network_layer/ipv6/hdr
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  85998	  34256	  78152	 198406	  30706	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+................
+OK (16 tests)
+
+native: exiting
+
+--- stderr ---
+==349==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffe8690d000; bottom 0x000000430000; size: 0x7ffe864dd000 (140731151667200)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

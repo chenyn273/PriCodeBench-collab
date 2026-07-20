@@ -1,0 +1,125 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `ztimer_set` does:
+
+1. **Disables interrupts** to protect the timer queue from concurrent modification
+2. **Removes the timer if already set** — prevents duplicates in the queue
+3. **Acquires the clock** (ondemand only) — starts the underlying hardware if this is the first user
+4. **Updates the head offset** — reconciles elapsed time in the timer queue, capturing `now`
+5. **Releases the clock** (ondemand only) if the timer was already set — the earlier `_ztimer_acquire` accounted for the new entry, but removing the old one means the net user count is unchanged, so the extra acquire must be balanced
+6. **Applies `adjust_set`** — compensates for hardware timer set latency
+7. **Applies `adjust_clock_start`** (ondemand only) — compensates for clock startup latency when the clock was just started
+8. **Clamps to 0** if adjustments would exceed `val` — prevents underflow
+9. **Inserts into the sorted queue** via `_add_entry_to_list`
+10. **Updates the hardware timer** via `_ztimer_update` — arms or rearms the underlying clock
+11. **Restores interrupts** and returns `now` — per the API contract, the caller can compute absolute trigger time as `now + val`
+
+This follows the same patterns as `ztimer_remove` and `ztimer_handler` in the same file.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/ztimer/core.c
++++ sys/ztimer/core.c
+@@ -158,7 +158,48 @@
+ 
+ uint32_t ztimer_set(ztimer_clock_t *clock, ztimer_t *timer, uint32_t val)
+ {
+-    /* MASKED - implement this function */
++    unsigned state = irq_disable();
++
++    bool was_set = _is_set(clock, timer);
++    bool first_clock_user = false;
++
++    if (was_set) {
++        _del_entry_from_list(clock, &timer->base);
++    }
++
++#if MODULE_ZTIMER_ONDEMAND
++    first_clock_user = _ztimer_acquire(clock);
++#else
++    (void)first_clock_user;
++#endif
++
++    uint32_t now = _ztimer_update_head_offset(clock);
++
++    if (was_set) {
++#if MODULE_ZTIMER_ONDEMAND
++        ztimer_release(clock);
++#endif
++    }
++
++    if (val > clock->adjust_set) {
++        val -= clock->adjust_set;
++    }
++    else {
++        val = 0;
++    }
++
++#if MODULE_ZTIMER_ONDEMAND
++    if (first_clock_user && val > clock->adjust_clock_start) {
++        val -= clock->adjust_clock_start;
++    }
++#endif
++
++    timer->base.offset = val;
++    _add_entry_to_list(clock, &timer->base);
++    _ztimer_update(clock);
++
++    irq_restore(state);
++    return now;
+ }
+ 
+ static void _add_entry_to_list(ztimer_clock_t *clock, ztimer_base_t *entry)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-ztimer
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/frac
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/ztimer
+   text	   data	    bss	    dec	    hex	filename
+ 110667	  34200	  78120	 222987	  3670b	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+................
+OK (16 tests)
+
+native: exiting
+
+--- stderr ---
+==363==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff496fd000; bottom 0x000000436000; size: 0x7fff492c7000 (140734421037056)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+==363==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+
+
+

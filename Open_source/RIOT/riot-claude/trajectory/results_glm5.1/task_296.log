@@ -1,0 +1,96 @@
+============================================================
+=== Claude Session ===
+============================================================
+Done. `thread_kill_zombie` is now implemented with the following logic:
+
+1. **Disable interrupts** to protect the scheduler state
+2. **Look up the thread** by PID via `thread_get(pid)`
+3. **Validate** — if the thread doesn't exist or isn't in `STATUS_ZOMBIE`, restore interrupts and return `STATUS_NOT_FOUND`
+4. **Clean up** — null out `sched_threads[pid]`, decrement `sched_num_threads`, and set the thread's status to `STATUS_STOPPED`
+5. **Restore interrupts** and return `1` on success
+
+This follows the same cleanup pattern as `sched_task_exit()` (the non-zombie thread termination path in `core/sched.c`), but operates on a zombie thread identified by PID rather than the currently running thread.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- core/thread.c
++++ core/thread.c
+@@ -76,7 +76,22 @@
+ 
+ int thread_kill_zombie(kernel_pid_t pid)
+ {
+-    /* MASKED - implement this function */
++    unsigned state = irq_disable();
++
++    thread_t *thread = thread_get(pid);
++
++    if (!thread || thread->status != STATUS_ZOMBIE) {
++        irq_restore(state);
++        return STATUS_NOT_FOUND;
++    }
++
++    sched_threads[pid] = NULL;
++    sched_num_threads--;
++    sched_set_status(thread, STATUS_STOPPED);
++
++    irq_restore(state);
++
++    return 1;
+ }
+ 
+ void thread_sleep(void)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-isrpipe
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/frac
+"make" -C /workspace/sys/isrpipe
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/isrpipe/read_timeout
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/tsrb
+"make" -C /workspace/sys/ztimer
+   text	   data	    bss	    dec	    hex	filename
+  95180	  34296	  82728	 212204	  33cec	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+........
+OK (8 tests)
+
+native: exiting
+
+--- stderr ---
+==387==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffd1ca43000; bottom 0x000000431000; size: 0x7ffd1c612000 (140725079580672)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+==387==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+
+
+

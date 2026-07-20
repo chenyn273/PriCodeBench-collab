@@ -1,0 +1,69 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation mirrors the pattern of the compressed version but for the fallback case where `ZPTR_BASE` is not defined. In that case, `zptr_t` is `void *`, and `zptrc()` just casts the pointer to `zptr_t`, so `zptrd()` simply casts it back to `void *`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/include/zptr.h
++++ sys/include/zptr.h
+@@ -127,9 +127,7 @@
+ #define PRIzptr "p"
+ static inline int zptr_check(void *pointer) { (void)pointer; return 0; }
+ static inline zptr_t zptrc(void *pointer) { return (zptr_t)pointer; }
+-static inline void *zptrd(zptr_t zptr) {
+-    /* MASKED - implement this function */
+-}
++static inline void *zptrd(zptr_t zptr) { return (void *)zptr; }
+ #endif
+ 
+ #ifdef __cplusplus
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-zptr
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+  71965	  30920	  78120	 181005	  2c30d	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+.
+OK (1 tests)
+
+native: exiting
+
+--- stderr ---
+==322==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7fff91a2a000; bottom 0x00000042b000; size: 0x7fff915ff000 (140735632371712)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

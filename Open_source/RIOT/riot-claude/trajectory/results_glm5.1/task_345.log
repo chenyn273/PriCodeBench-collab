@@ -1,0 +1,89 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what `uri_parser_process` does:
+
+1. **Computes the end pointer** from `uri` + `uri_len` for the bounded string helpers
+2. **Zero-initializes** the result struct with `memset` so all pointer and length fields start as 0/NULL
+3. **Dispatches** to `_parse_absolute` if the URI is absolute (has a valid scheme), or `_parse_relative` otherwise
+
+This follows the existing patterns in the codebase — both `_parse_absolute` and `_parse_relative` take `(result, uri, uri_end)` and return 0 on success or -1 on error, which matches the documented contract of `uri_parser_process`.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/uri_parser/uri_parser.c
++++ sys/uri_parser/uri_parser.c
+@@ -316,7 +316,16 @@
+ int uri_parser_process(uri_parser_result_t *result, const char *uri,
+                        size_t uri_len)
+ {
+-    /* MASKED - implement this function */
++    const char *uri_end = uri + uri_len;
++
++    memset(result, 0, sizeof(*result));
++
++    if (uri_parser_is_absolute(uri, uri_len)) {
++        return _parse_absolute(result, uri, uri_end);
++    }
++    else {
++        return _parse_relative(result, uri, uri_end);
++    }
+ }
+ 
+ int uri_parser_process_string(uri_parser_result_t *result, const char *uri)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-uri_parser
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/fmt
+"make" -C /workspace/sys/libc
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+"make" -C /workspace/sys/uri_parser
+"make" -C /workspace/boards/common/native/drivers
+   text	   data	    bss	    dec	    hex	filename
+ 107676	  40848	  78400	 226924	  3766c	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+..
+URI-Input: 
+Expected return: -1
+Observed return: 0
+uri_parser_tests._successful_rejecting_of_invalid_uri (tests/unittests/tests-uri_parser/tests-uri_parser.c 195) Failure: The uri_parser failed to reject an invalid uri.
+........
+run 10 failures 1
+
+native: exiting
+
+--- stderr ---
+==336==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffceecd9000; bottom 0x000000436000; size: 0x7ffcee8a3000 (140724310519808)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+

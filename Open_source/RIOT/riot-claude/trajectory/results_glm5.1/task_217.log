@@ -1,0 +1,78 @@
+============================================================
+=== Claude Session ===
+============================================================
+The implementation is complete. Here's what I did:
+
+The `luid_custom` function generates a custom unique ID by:
+
+1. Calling `luid_base(buf, len)` to get the base ID
+2. XORing the low byte of `gen` into `buf[0]` and the high byte of `gen` into `buf[1]`
+
+This matches the header documentation which states: "The resulting ID is built from the base ID XORed with `gen` in the base ID's most significant bytes." The function uses the first two bytes (indices 0 and 1) to XOR the 16-bit `gen` value, consistent with how other `luid_*` functions XOR their varying component into the lowest-index bytes.
+
+
+============================================================
+=== Diff ===
+============================================================
+--- sys/luid/luid.c
++++ sys/luid/luid.c
+@@ -69,7 +69,10 @@
+ 
+ void luid_custom(void *buf, size_t len, uint16_t gen)
+ {
+-    /* MASKED - implement this function */
++    luid_base(buf, len);
++
++    ((uint8_t *)buf)[0] ^= gen;
++    ((uint8_t *)buf)[1] ^= gen >> 8;
+ }
+ 
+ void luid_get_short(network_uint16_t *addr)
+
+
+
+
+============================================================
+=== Harness Verify ===
+============================================================
+Building application "tests_unittests" for "native64" with CPU "native".
+
+"make" -C /workspace/boards
+"make" -C /workspace/boards/native64
+"make" -C /workspace/core
+"make" -C /workspace/core/lib
+"make" -C /workspace/cpu/native
+"make" -C /workspace/drivers
+"make" -C /workspace/sys
+"make" -C /workspace/tests/unittests/tests-luid
+"make" -C /workspace/boards/common/init
+"make" -C /workspace/boards/common/native
+"make" -C /workspace/cpu/native/periph
+"make" -C /workspace/sys/embunit
+"make" -C /workspace/drivers/periph_common
+"make" -C /workspace/cpu/native/stdio_native
+"make" -C /workspace/sys/libc
+"make" -C /workspace/sys/luid
+"make" -C /workspace/boards/common/native/drivers
+"make" -C /workspace/sys/stdio
+"make" -C /workspace/sys/test_utils/print_stack_usage
+   text	   data	    bss	    dec	    hex	filename
+  76932	  31280	  78184	 186396	  2d81c	/tmp/build/bin/native64/tests_unittests.elf
+RIOT native interrupts/signals initialized.
+TZ not set, setting UTC
+RIOT native64 board initialized.
+RIOT native hardware initialization complete.
+
+main(): This is RIOT! (Version: 2026.01)
+...
+OK (3 tests)
+
+native: exiting
+
+--- stderr ---
+==335==WARNING: ASan is ignoring requested __asan_handle_no_return: stack type: default top: 0x7ffc85943000; bottom 0x00000042d000; size: 0x7ffc85516000 (140722545188864)
+False positive error reports may follow
+For details see https://github.com/google/sanitizers/issues/189
+
+
+
