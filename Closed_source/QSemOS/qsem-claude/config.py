@@ -1,5 +1,5 @@
 """
-QSem-Claude 全局配置
+QSem-Claude 全局配置 (Docker edition)
 """
 import os
 from pathlib import Path
@@ -28,3 +28,31 @@ DATASET_PATH = Path(os.environ.get(
 
 CHECK_TESTS_DIR = QSemOS_ROOT / "check_tests"
 TASKS_DIR = CHECK_TESTS_DIR / "tasks"
+
+# =========================================================================
+# Docker 配置
+# =========================================================================
+
+# 工作区根目录（隔离副本存放位置）
+WORKSPACE_BASE = Path(
+    os.environ.get("QSEM_WORKSPACE_BASE", "/tmp/qsem-workspaces")
+)
+
+# Docker 镜像（需先执行: docker build -t qsem-sandbox .）
+DOCKER_IMAGE = os.environ.get("QSEM_DOCKER_IMAGE", "riot-sandbox:latest")
+
+# Claude 容器的网络模式（默认 none = 彻底断网）
+CLAUDE_NETWORK_MODE = os.environ.get("QSEM_CLAUDE_NETWORK", "none")
+
+# 容器资源限制
+DOCKER_PIDS_LIMIT = "256"
+DOCKER_MEMORY = os.environ.get("QSEM_DOCKER_MEMORY", "4g")
+DOCKER_CPUS = os.environ.get("QSEM_DOCKER_CPUS", "2")
+
+# 只允许传递给 Claude 容器的环境变量白名单
+ALLOWED_CLAUDE_ENV = {
+    "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+}

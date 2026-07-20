@@ -1519,52 +1519,6 @@
     }
   },
   {
-    "task_id": "133",
-    "sut_function": "OsPerfGetEventName",
-    "source_path": "src/extended/perf/pmu/prt_perf_timed_pmu.c",
-    "module": "perf/pmu",
-    "actual_pass": false,
-    "is_false_failure": false,
-    "classification": {
-      "L1": "test_failure",
-      "L2": "semantic_drift",
-      "L3_detail": [
-        "semantic_drift: call jaccard=1.00, structurally similar but behavior differs"
-      ],
-      "call_diff": {
-        "only_claude": [],
-        "only_oracle": [],
-        "shared": [],
-        "claude_count": 0,
-        "oracle_count": 0,
-        "jaccard": 1.0
-      },
-      "field_diff": {
-        "only_claude": [],
-        "only_oracle": [],
-        "jaccard": 1.0
-      },
-      "macro_diff": {
-        "only_claude": [],
-        "only_oracle": []
-      },
-      "claude_control": {
-        "return_statement": 2,
-        "if_statement": 1
-      },
-      "oracle_control": {
-        "if_statement": 1,
-        "else_clause": 1,
-        "return_statement": 2
-      }
-    },
-    "body_sizes": {
-      "claude_chars": 230,
-      "oracle_chars": 120,
-      "ratio": 1.9166666666666667
-    }
-  },
-  {
     "task_id": "135",
     "sut_function": "OsPerfTimedConfig",
     "source_path": "src/extended/perf/pmu/prt_perf_timed_pmu.c",

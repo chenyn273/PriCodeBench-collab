@@ -53,11 +53,12 @@ whitebox 报告不得包含 integrity_violation 条目。
 
 ## 5. crash 检测修复（裂缝②）
 
-`agent.py` 第 488–522 行：
+`agent.py` `_verify_tests` 方法：
 - crash 正则匹配源从 `full`（stdout+stderr）改为 `stdout`（仅运行时输出），避免 stderr 中的编译 warning 被误判为 crash
 - crash 正则为 `r"(?:Segmentation\s+fault|Aborted|\bpanic\b|signal\s+\d+)"`（保留完整模式，但因匹配源改为 stdout 已不再误命中 ipc/signal 测试的正常输出）
 - 修正了 17 条 QSemOS DS 假失败（task 75,76,78,79,81,83,84,85,87,89,124,125,126,127,129,130,131）
 - 2026-07-19 验证：用 Claude 的补全体重新编译测试，17/17 全部 100% 通过，证实为真·假失败
+- 修正后 `results.jsonl` 已更新（passed=True），`retest_false_failures.py` 已验证后移除
 
 ## 6. 上下文不可获取任务（裂缝③）
 
@@ -82,16 +83,26 @@ QSemOS GLM：31 条 test_failure 中未发现假失败。
 - 当前活跃：deepseek-v4-pro（QSemOS + RIOT）、glm-5.1（QSemOS 237、RIOT 539）
 - RIOT GLM 539 已于 2026-07-19 跑完并生成 whitebox_report_glm5.1.json（56 条，6H + 50M）
 - 已移除/未跑：kimi-k2.7-code、qwen3.7
-- 模型调用方式：通过 CC-Switch 切换不同模型
+- 模型调用方式：通过 CC-Switch 路由不同模型 API
 
-## 9. 模块体系
+## 9. 执行环境与管线
+
+- agent.py 已从宿主机直跑重构为 Docker 容器隔离（对齐 RIOT 管线）
+- 隔离措施：`--network none --cap-drop ALL --security-opt no-new-privileges --pids-limit 256 --memory 4g --cpus 2`
+- 工作区：`/tmp/qsem-workspaces/task_N/`（用完即删）
+- 配置文件：`Dockerfile`（基于 ubuntu:24.04，含 gcc/make/claude-code）
+- 网络模式可通过 `QSEM_CLAUDE_NETWORK` 环境变量覆盖（默认 `none`）
+- check_tests 隐藏：mv 到随机后缀（`.check_tests_hidden_<pid>_<id>`），替代旧版 chmod 000
+
+## 10. 模块体系
 
 QSemOS L1 模块：`ipc / kernel / perf / utility / extend / other`
 RIOT L1 模块：`net, net/app, net/link, net/routing, net/gnrc, net/crosslayer, drivers, sys/fs, sys/timer, sys/ipc, sys/util, core, other`
 
-## 10. 统计口径约定
+## 11. 统计口径约定
 
 - 通过率：分模型报（DS 一行、GLM 一行），不跨模型相加
 - 失败分类计数：跨模型相加（DS + GLM），同一函数两模型均失败计 2 次（不排重）
 - 假失败（is_false_failure=True）：剔除，不计入任何失败类
 - 指令遵循：从 results.jsonl 的 illegal_changes 计数，不在 whitebox 中
+- 数据集已剔除 3 个上下文不可获取任务（task 1, 5, 133），QSemOS 分母统一为 237
