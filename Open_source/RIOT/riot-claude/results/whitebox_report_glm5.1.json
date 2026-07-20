@@ -9,9 +9,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "wrong_operator",
+      "L2": "wrong_calculation",
       "L3_detail": [
-        "used / instead of >> causing signed integer rounding error"
+        "used / instead of >> causing signed integer rounding error (exp 65535 was -1)"
       ]
     }
   },
@@ -27,7 +27,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "unused variable/function triggers -Werror"
+        "-Werror: unused-variable"
       ]
     }
   },
@@ -41,9 +41,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "logic_error",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "test_failure - no trajectory data available"
+        "BCD encoding nibble order reversed: first digit placed in high nibble instead of low; oracle processes right-to-left with alternating nibble placement via i&1 ? d<<4 : d"
       ]
     }
   },
@@ -57,9 +57,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "logic_error",
+      "L2": "wrong_calculation",
       "L3_detail": [
-        "test_failure - no trajectory data available"
+        "bitmask for partial byte missing bitwise NOT (~): selects lower (8-bits) bits instead of upper bits bits; oracle uses ~((1U << (8 - bits)) - 1)"
       ]
     }
   },
@@ -75,7 +75,7 @@
       "L1": "compile_error",
       "L2": "hallucinated_api",
       "L3_detail": [
-        "undefined reference to bf_clear_all"
+        "undefined reference to bf_clear_all (bf_clear_all does not exist in RIOT bitfield API)"
       ]
     }
   },
@@ -121,9 +121,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_not_executed",
-      "L2": "werror_style",
+      "L2": "test_not_executed",
       "L3_detail": [
-        "-Werror=sign-compare + -Werror=unused-variable"
+        "test binary did not execute or shell error"
       ]
     }
   },
@@ -137,9 +137,9 @@
     "mechanism": "hallucination",
     "classification": {
       "L1": "compile_error",
-      "L2": "implicit_declaration",
+      "L2": "hallucinated_api",
       "L3_detail": [
-        "implicit declaration of function"
+        "implicit declaration of coap_parse_hdr_len (function renamed/missing)"
       ]
     }
   },
@@ -153,9 +153,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "compile_error",
-      "L2": "werror_style",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "-Werror=incompatible-pointer-types\u001b[m\u001b[K]"
+        "incompatible types"
       ]
     }
   },
@@ -169,9 +169,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "logic_error",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "test_failure - no trajectory data available"
+        "_mix() called before _gen_parity(); oracle: _gen_parity FIRST then _mix. Mixing scrambles data in-place, destroying parity recoverability (4 tests failed)"
       ]
     }
   },
@@ -185,9 +185,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "side_effect_error",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "chunk management state machine error: assertion failed"
+        "chunk management state machine error: _get_free_chunk allocation logic diverges from oracle's reference counting/state management; keep=false return value incorrect"
       ]
     }
   },
@@ -201,9 +201,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "logic_error",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "test_failure - no trajectory data available"
+        "EC private key DER parsing returns CREDMAN_INVALID (2) instead of CREDMAN_OK (0); likely key buffer extraction or ASN.1 field parsing discrepancy with oracle"
       ]
     }
   },
@@ -219,7 +219,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "unused variable/function triggers -Werror"
+        "-Werror: unused-function"
       ]
     }
   },
@@ -235,7 +235,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "-Werror=unused-variable"
+        "-Werror: unused-variable"
       ]
     }
   },
@@ -249,9 +249,9 @@
     "mechanism": "hallucination",
     "classification": {
       "L1": "compile_error",
-      "L2": "hallucinated_symbol",
+      "L2": "undefined_reference",
       "L3_detail": [
-        "KGNRC_IPV6_NIB_ABR_TIMEOUT undeclared"
+        "K undeclared (hallucinated constant/macro)"
       ]
     }
   },
@@ -265,9 +265,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "crash",
-      "L2": "needs_manual_inspection",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
-        "crash root cause not yet analyzed"
+        "segfault in gnrc_ipv6_nib_ft_del: iterating _nib_drl_iter/_nib_offl_iter entries without null-checking entry->next_hop before ipv6_addr_equal() dereference; NULL next_hop causes segfault in default route path"
       ]
     }
   },
@@ -281,9 +281,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "crash",
-      "L2": "needs_manual_inspection",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
-        "crash root cause not yet analyzed"
+        "segfault: entry->demux_ctx dereferenced without NULL check. Parameter 'entry' can be NULL (iteration start sentinel), causing crash on entry->demux_ctx access. Oracle first checks if(entry==NULL) return _netreg;"
       ]
     }
   },
@@ -297,9 +297,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "missing_corner_cases",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
-        "VRB add logic missing tag collision detection and duplicate entry handling"
+        "VRB add logic missing tag collision detection and duplicate entry handling (exp 1742197326 was 10); oracle handles tag collision + duplicate datagram + timeout entry recycling"
       ]
     }
   },
@@ -313,9 +313,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "crash",
-      "L2": "needs_manual_inspection",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
-        "crash root cause not yet analyzed"
+        "segfault in gnrc_udp_calc_csum: payload->data accessed without verifying payload->data != NULL. gnrc_pktsnip_t chain may have snips with NULL data pointers for header-only entries"
       ]
     }
   },
@@ -329,9 +329,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "control_flow_error",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "PAN compression conditional logic error"
+        "PAN compression conditional logic error (exp 0 was 3); FCF_PAN_COMP/DST_ADDR_VOID combination judgment diverges from IEEE 802.15.4"
       ]
     }
   },
@@ -347,7 +347,7 @@
       "L1": "test_not_executed",
       "L2": "test_not_executed",
       "L3_detail": [
-        "test binary did not execute"
+        "test binary did not execute or shell error"
       ]
     }
   },
@@ -363,7 +363,7 @@
       "L1": "test_not_executed",
       "L2": "test_not_executed",
       "L3_detail": [
-        "test binary did not execute"
+        "test binary did not execute or shell error"
       ]
     }
   },
@@ -374,12 +374,12 @@
     "module": "net/routing",
     "actual_pass": false,
     "is_false_failure": false,
-    "mechanism": "hallucination",
+    "mechanism": "misunderstanding",
     "classification": {
       "L1": "compile_error",
-      "L2": "hallucinated_api",
+      "L2": "werror_style",
       "L3_detail": [
-        "undefined reference to ipv4_addr_from_buf"
+        "-Werror: unused-function"
       ]
     }
   },
@@ -393,9 +393,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_not_executed",
-      "L2": "bit_manipulation_error",
+      "L2": "test_not_executed",
       "L3_detail": [
-        "IID bit manipulation error"
+        "test binary did not execute or shell error"
       ]
     }
   },
@@ -427,7 +427,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "-Werror=sign-compare\u001b[m\u001b[K]"
+        "-Werror: sign-compare"
       ]
     }
   },
@@ -441,9 +441,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "logic_error",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "test_failure - no trajectory data available"
+        "mutex_init() creates unlocked mutex; oracle uses MUTEX_INIT_LOCKED (locked initial state). isrpipe mutex must start locked for correct ISR synchronization"
       ]
     }
   },
@@ -459,7 +459,7 @@
       "L1": "test_failure",
       "L2": "missing_conditional_guard",
       "L3_detail": [
-        "missing addr/count alignment check + missing driver->erase direct path"
+        "missing count % sector_size alignment check; oracle returns -EOVERFLOW for misaligned addr/count. GLM omits this guard and returns different error code (exp -75 was -22)"
       ]
     }
   },
@@ -470,12 +470,12 @@
     "module": "drivers",
     "actual_pass": false,
     "is_false_failure": false,
-    "mechanism": "misunderstanding",
+    "mechanism": "hallucination",
     "classification": {
       "L1": "compile_error",
-      "L2": "compilation_error_other",
+      "L2": "undefined_reference",
       "L3_detail": [
-        "compilation error"
+        "accessing non-existent struct member"
       ]
     }
   },
@@ -489,9 +489,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "loop_logic_error",
+      "L2": "wrong_calculation",
       "L3_detail": [
-        "year/month loop calculation error: tm_hour/tm_min/tm_sec all 0"
+        "year/month/day loop calculation error: tm_hour/tm_min/tm_sec all 0 (exp 3/1/5 was 0). Time conversion from Unix timestamp consumes time variable incorrectly in leap-year/month-length loops"
       ]
     }
   },
@@ -505,9 +505,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "logic_error",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "test_failure - no trajectory data available"
+        "should use rtt_set_counter() to synchronize hw counter with us offset; instead computes relative offset (now - offset → last_alarm) which accumulates drift (exp 125000 was 312500). Oracle: rtt_set_counter(now); _update_alarm(0)"
       ]
     }
   },
@@ -521,9 +521,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "data_structure_order",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "linked list head-insert instead of tail-append (LIFO vs FIFO)"
+        "linked list head-insert (dev->next = saul_reg; saul_reg = dev) instead of tail-append (LIFO vs FIFO); exp 'S0' was 'S1'"
       ]
     }
   },
@@ -537,9 +537,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "logic_error",
+      "L2": "wrong_calculation",
       "L3_detail": [
-        "test_failure - no trajectory data available"
+        "SHA-512/224 state[2] initialization constant wrong: 0x1DFAB7AE32FF9CB8 should be 0x1DFAB7AE32FF9C82 (one hex digit off: 'B8' vs '82'). Causes 6 hash verification failures"
       ]
     }
   },
@@ -555,7 +555,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "unused variable/function triggers -Werror"
+        "-Werror: unused-function"
       ]
     }
   },
@@ -569,9 +569,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "validation_logic_inverted",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "empty segment detection and error return logic inverted"
+        "empty segment detection and error return logic inverted (exp -1 was 1); Claude returns error on empty segments that oracle tolerates, and returns success when oracle returns error"
       ]
     }
   },
@@ -585,9 +585,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "wrong_return_value",
+      "L2": "semantic_drift",
       "L3_detail": [
-        "UUID formatting return value error"
+        "UUID formatting return value: function is void but test checks output buffer; fmt_u32_hex/fmt_u16_hex return value accumulation differs from oracle (exp 0 was 32 — expected 32 chars written but got 0)"
       ]
     }
   },
@@ -601,9 +601,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "compile_error",
-      "L2": "werror_style",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "-Werror=incompatible-pointer-types\u001b[m\u001b[K]"
+        "incompatible types"
       ]
     }
   },
@@ -619,7 +619,7 @@
       "L1": "test_failure",
       "L2": "missing_conditional_guard",
       "L3_detail": [
-        "missing mountp==NULL guard + missing memset clear"
+        "missing mountp==NULL guard: dirp NULL check returns -EINVAL instead of -EBADF; missing memset(dirp,0,sizeof(*dirp)) cleanup. Oracle: if(mountp==NULL) return -EBADF; memset clear (exp -9 was 0, exp 0 was -1)"
       ]
     }
   },
@@ -635,7 +635,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "-Werror=format=\u001b[m\u001b[K]"
+        "-Werror: various -Werror"
       ]
     }
   },
@@ -649,9 +649,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "missing_api_call",
+      "L2": "missing_error_path",
       "L3_detail": [
-        "missing clock->ops->cancel(clock) call"
+        "missing clock->ops->cancel(clock) call before stop; oracle decrements users, calls cancel() then stop(). GLM: only calls stop() without cancel(), timer remains armed (exp 0 was 1 on 3 tests)"
       ]
     }
   },
@@ -667,7 +667,7 @@
       "L1": "compile_error",
       "L2": "hallucinated_api",
       "L3_detail": [
-        "implicit declaration of clist_find_before"
+        "implicit declaration of clist_find_before (hallucinated helper)"
       ]
     }
   },
@@ -683,7 +683,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "unused variable/function triggers -Werror"
+        "-Werror: unused-function - return-type"
       ]
     }
   },
@@ -699,7 +699,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "unused variable/function triggers -Werror"
+        "-Werror: unused-function - return-type"
       ]
     }
   },
@@ -715,7 +715,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "unused variable/function triggers -Werror"
+        "-Werror: unused-function - return-type"
       ]
     }
   },
@@ -729,9 +729,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "crash",
-      "L2": "needs_manual_inspection",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "crash root cause not yet analyzed"
+        "segfault in gnrc_pkt_delete: when pkt==snip, returns pkt->next without properly unlinking from packet chain. Missing prev_snip NULL guard; pkt chain traversal breaks when snip is not in pkt's chain"
       ]
     }
   },
@@ -763,7 +763,7 @@
       "L1": "compile_error",
       "L2": "hallucinated_api",
       "L3_detail": [
-        "undefined reference to gnrc_sixlowpan_frag_rb_base_rm"
+        "undefined reference to gnrc_sixlowpan_frag_rb_base_rm (gnrc_sixlowpan_frag_rb_base_rm does not exist)"
       ]
     }
   },
@@ -777,7 +777,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "compile_error",
-      "L2": "syntax_error",
+      "L2": "logic_deviation",
       "L3_detail": [
         "syntax error"
       ]
@@ -793,9 +793,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "logic_error",
+      "L2": "wrong_calculation",
       "L3_detail": [
-        "test_failure - no trajectory data available"
+        "unnecessary >> 3 on fragment offset: IPv6 frag header offset field is already in 8-byte units per RFC 2460, no shifting needed. Oracle: just mask without shift. (exp 4648 was 581, 8x difference)"
       ]
     }
   },
@@ -809,9 +809,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "logic_error",
+      "L2": "wrong_calculation",
       "L3_detail": [
-        "test_failure - no trajectory data available"
+        "DSCP bit extraction mask wrong: 0x0c (selects v_tc_fl.u8[0] bits 2-3) should be 0x03 (bits 0-1); RFC 2474 DSCP occupies top 6 bits of IPv6 TC field (exp 50 was 194)"
       ]
     }
   },
@@ -825,9 +825,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "compile_error",
-      "L2": "type_error",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "type mismatch"
+        "conflicting types for shared symbol"
       ]
     }
   },
@@ -843,7 +843,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "unused variable/function triggers -Werror"
+        "-Werror: unused-function - return-type"
       ]
     }
   },
@@ -859,7 +859,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "unused variable/function triggers -Werror"
+        "-Werror: unused-function - return-type"
       ]
     }
   },
@@ -875,7 +875,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "unused variable/function triggers -Werror"
+        "-Werror: unused-function - return-type"
       ]
     }
   },
@@ -891,7 +891,7 @@
       "L1": "compile_error",
       "L2": "werror_style",
       "L3_detail": [
-        "unused variable/function triggers -Werror"
+        "-Werror: unused-function - return-type"
       ]
     }
   }

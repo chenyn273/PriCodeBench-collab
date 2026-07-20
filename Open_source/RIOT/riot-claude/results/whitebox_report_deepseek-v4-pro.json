@@ -9,7 +9,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "wrong_operator",
+      "L2": "wrong_calculation",
       "L3_detail": [
         "used / instead of >> causing signed integer rounding error"
       ]
@@ -41,7 +41,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "semantic_misunderstanding",
+      "L2": "logic_deviation",
       "L3_detail": [
         "return value semantics wrong: returned hdr_len+payload_len instead of hdr_len"
       ]
@@ -105,7 +105,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "algorithm_incomplete",
+      "L2": "logic_deviation",
       "L3_detail": [
         "recovery algorithm incomplete: output '0' instead of '0123456789AB'"
       ]
@@ -121,7 +121,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "side_effect_error",
+      "L2": "logic_deviation",
       "L3_detail": [
         "chunk management state machine error: assertion failed"
       ]
@@ -201,7 +201,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "compile_error",
-      "L2": "missing_include",
+      "L2": "logic_deviation",
       "L3_detail": [
         "implicit declaration of IPv6 addr functions"
       ]
@@ -217,9 +217,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "crash",
-      "L2": "needs_manual_inspection",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
-        "crash root cause not yet analyzed"
+        "assert(entry != NULL) aborts on NULL sentinel; oracle handles NULL gracefully"
       ]
     }
   },
@@ -233,9 +233,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "crash",
-      "L2": "needs_manual_inspection",
+      "L2": "logic_deviation",
       "L3_detail": [
-        "crash root cause not yet analyzed"
+        "pktbuf split shifts data pointer without allocating aligned buffer; oracle allocs _pktbuf_alloc(size)"
       ]
     }
   },
@@ -249,7 +249,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "missing_corner_cases",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
         "VRB add logic missing tag collision detection and duplicate entry handling"
       ]
@@ -265,7 +265,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "control_flow_error",
+      "L2": "logic_deviation",
       "L3_detail": [
         "PAN compression conditional logic error"
       ]
@@ -281,7 +281,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "algorithm_incomplete",
+      "L2": "logic_deviation",
       "L3_detail": [
         "frame header construction systematic deviation: 4 tests all failed"
       ]
@@ -297,7 +297,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "accumulator_precision",
+      "L2": "wrong_calculation",
       "L3_detail": [
         "checksum accumulator precision insufficient + odd/even handling deviation"
       ]
@@ -345,7 +345,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "bit_manipulation_error",
+      "L2": "wrong_calculation",
       "L3_detail": [
         "IID bit manipulation error"
       ]
@@ -377,7 +377,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "architecture_error",
+      "L2": "logic_deviation",
       "L3_detail": [
         "reimplemented low-level logic instead of reusing isrpipe_read_timeout"
       ]
@@ -409,7 +409,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "loop_logic_error",
+      "L2": "wrong_calculation",
       "L3_detail": [
         "year/month loop calculation error: tm_hour/tm_min/tm_sec all 0"
       ]
@@ -425,7 +425,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "data_structure_order",
+      "L2": "logic_deviation",
       "L3_detail": [
         "linked list head-insert instead of tail-append (LIFO vs FIFO)"
       ]
@@ -441,7 +441,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "mixed_guard_and_loop",
+      "L2": "logic_deviation",
       "L3_detail": [
         "missing count==0 early check + loop boundary differs from oracle"
       ]
@@ -457,7 +457,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "validation_logic_inverted",
+      "L2": "logic_deviation",
       "L3_detail": [
         "empty segment detection and error return logic inverted"
       ]
@@ -473,7 +473,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "wrong_return_value",
+      "L2": "semantic_drift",
       "L3_detail": [
         "UUID formatting return value error"
       ]
@@ -505,7 +505,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "wrong_error_semantics",
+      "L2": "logic_deviation",
       "L3_detail": [
         "treated optional opendir as error: should return 0 but returned -ENOTSUP"
       ]
@@ -521,9 +521,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "crash",
-      "L2": "needs_manual_inspection",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
-        "crash root cause not yet analyzed"
+        "NULL fs_op dereference: falls through to vfs_sysop_stat_from_fstat when fs_op is NULL"
       ]
     }
   },
@@ -537,7 +537,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "test_failure",
-      "L2": "missing_api_call",
+      "L2": "missing_error_path",
       "L3_detail": [
         "missing clock->ops->cancel(clock) call"
       ]
@@ -553,7 +553,7 @@
     "mechanism": "hallucination",
     "classification": {
       "L1": "compile_error",
-      "L2": "hallucinated_symbol",
+      "L2": "undefined_reference",
       "L3_detail": [
         "_callback_wakeup undeclared"
       ]
@@ -633,9 +633,9 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "crash",
-      "L2": "needs_manual_inspection",
+      "L2": "missing_conditional_guard",
       "L3_detail": [
-        "crash root cause not yet analyzed"
+        "missing snip==NULL check; gnrc_pkt_prev_snip(pkt, NULL) segfaults on NULL input"
       ]
     }
   },
@@ -681,7 +681,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "compile_error",
-      "L2": "type_error",
+      "L2": "logic_deviation",
       "L3_detail": [
         "invalid operands to binary == (struct comparison)"
       ]
@@ -697,7 +697,7 @@
     "mechanism": "misunderstanding",
     "classification": {
       "L1": "compile_error",
-      "L2": "mixed",
+      "L2": "logic_deviation",
       "L3_detail": [
         "incompatible type + -Werror=return-type"
       ]
